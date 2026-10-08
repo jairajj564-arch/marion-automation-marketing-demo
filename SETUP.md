@@ -165,7 +165,7 @@ Click the small arrow next to **Execute workflow** (bottom centre) → choose **
 **3. Activate.** Toggle **Inactive → Active** (top right). From now on Lanes 2, 4, 5, 6, 7 and 8 run on their own; the two forms work.
 ✅ Within a minute or two: approved posts appear in your Telegram channel when their `scheduled_for` passes; reel ideas arrive in your private chat; the sample leads start getting nurture emails in the customers inbox (3 per minute).
 
-**4. Lead form (Lane 3 → Lane 4).** Open http://localhost:5678/form/kaya-waitlist, sign up with `kayademo.customers+you1@gmail.com` (choose a budget above ₹5,000 to make it a hot lead).
+**4. Lead form (Lane 3 → Lane 4).** Wait about 3 minutes after activating: the sample sheet starts with 9 leads whose nurture email is overdue, and Lane 4 sends 3 per minute, oldest first, so a brand-new sign-up queues behind them. Then open http://localhost:5678/form/kaya-waitlist, sign up with `kayademo.customers+you1@gmail.com` (choose a budget above ₹5,000 to make it a hot lead).
 ✅ "You're on the list!" page · a new LEADS row (status `new`) · Telegram "🔥 New hot lead" · within ~1 minute the welcome email "You're on the list, <name> ✨" in the customers inbox.
 
 **5. Outreach (Lane 6).** Every 2 minutes 3 prospects get a personal email (highest fit score first).

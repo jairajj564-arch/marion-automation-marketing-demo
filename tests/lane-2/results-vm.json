@@ -17,7 +17,7 @@
   {
     "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
     "ok": true,
-    "message": "row published: published tg:101 2026-10-09T00:10:37+05:30"
+    "message": "row published: published tg:101 2026-10-09T00:54:27+05:30"
   },
   {
     "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
@@ -277,7 +277,7 @@
   {
     "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
     "ok": true,
-    "message": "SEND_DELAY_SECONDS respected between emails (0,1076,1055 ms)"
+    "message": "SEND_DELAY_SECONDS respected between emails (0,1053,1042 ms)"
   },
   {
     "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",

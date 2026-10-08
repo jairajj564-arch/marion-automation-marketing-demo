@@ -64,7 +64,7 @@ const OVERVIEW = `# Marion Enroute — Marketing Engine demo
 ## How to run the demo (5 steps)
 1. **Prepare:** in the sheet's **SETTINGS** tab keep \`DEMO_MODE\` = TRUE (1 day = 2 minutes) and set \`DEMO_LAUNCH_AT\` to about 15 minutes from now. Then switch this workflow to **Active** (top right).
 2. **Create content:** click **Execute workflow → Lane 1 · Start**. When the Telegram approval list arrives, set \`status\` = \`approved\` on 3–4 rows in **CONTENT**. Lane 2 posts them to the Telegram channel when they are due.
-3. **Capture a lead:** open \`http://localhost:5678/form/kaya-waitlist\` and sign up with \`kayademo.customers+you1@gmail.com\`. Lane 3 scores it, Lane 4 sends the welcome email within a minute and the nurture emails after that.
+3. **Capture a lead** (about 3 minutes after activating, once the sample leads' backlog is sent): open \`http://localhost:5678/form/kaya-waitlist\` and sign up with \`kayademo.customers+you1@gmail.com\`. Lane 3 scores it, Lane 4 sends the welcome email within a minute and the nurture emails after that.
 4. **Watch it run:** Lane 6 emails boutiques and creators every 2 minutes; at \`DEMO_LAUNCH_AT\` Lane 5 posts the launch and emails the early-access code.
 5. **Show a hot reply:** open \`http://localhost:5678/form/kaya-demo-reply\`, enter \`kayademo.customers+boutique1@gmail.com\` and pick **Interested**. Within a minute Lane 7 sends a 🔥 HOT alert; Lane 8 posts the campaign report to Telegram.
 
