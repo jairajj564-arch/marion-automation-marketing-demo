@@ -1,0 +1,1215 @@
+{
+  "name": "Kaya Jewels demo · Lane 4 · Sequence sender",
+  "nodes": [
+    {
+      "name": "Lane 4 · Sequence sender",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "## 📬 Lane 4 · Sequence sender  ·  trigger: every minute (cron `15 * * * * *`)\n**What it does:** finds waitlist leads whose next nurture email is due (status `new`/`nurturing`, consent TRUE, gap respected), renders the WAITLIST_NURTURE step, passes it through the demo safety gate, sends it with Gmail, **updates the lead row straight away**, then logs it. At most `MAX_SENDS_PER_RUN` emails per run; a reply or unsubscribe (Lane 7 changes the status) stops the sequence by itself.\n**Tabs:** reads SETTINGS, LEADS, SEQUENCES, BRIEF · writes LEADS (`status, seq_step, next_action_at, last_contacted_at, thread_ids, email_allowed, updated_at`) and EVENTS_LOG.\n**Credentials:** Kaya Demo · Google Sheets, Kaya Demo · Gmail Sender.  **Docs:** SPEC.md §7.4 · docs/lane-4.md explains every node.",
+        "height": 1000,
+        "width": 5200,
+        "color": 4
+      },
+      "id": "738f9434-0064-59e1-ad34-870a6f60276f",
+      "position": [
+        -240,
+        3600
+      ]
+    },
+    {
+      "name": "Lane 4 · How the loop works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "### How one round works\nPick due leads gives ONE item per lead. For each lead the loop runs: needs an email? → safety gate → allowed? → Gmail → **Decide outcome** (every path meets here) → update the lead → log → pause → next lead.\nThe lead row is updated BEFORE the next lead is touched, so a crash can never send the same step twice.",
+        "height": 90,
+        "width": 1700,
+        "color": 7
+      },
+      "id": "9d8cdb0c-8f88-51e7-a20c-c29721efe4db",
+      "position": [
+        1000,
+        4500
+      ]
+    },
+    {
+      "name": "Lane 4 · Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "15 * * * * *"
+            }
+          ]
+        }
+      },
+      "notes": "15 * * * * *",
+      "notesInFlow": true,
+      "id": "43e7cfaa-c68a-5569-a6a0-02707db313af",
+      "position": [
+        0,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Read SETTINGS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SETTINGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of SETTINGS",
+      "notesInFlow": true,
+      "id": "e9a02a54-fd5d-5cb8-a1a4-d7d556073d2c",
+      "position": [
+        220,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Settings to object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// SETTINGS arrives as one item per row (key | value | type | description).\n// Turn it into ONE item, e.g. { DEMO_MODE: 'TRUE', MAX_SENDS_PER_RUN: '3', ... },\n// so every later node can read settings with $('Lane 4 · Settings to object').first().json.KEY\nconst settings = {};\nfor (const item of $input.all()) {\n  const key = String(item.json.key ?? '').trim();\n  if (!key) continue;\n  const value = item.json.value;\n  settings[key] = typeof value === 'string' ? value.trim() : (value ?? '');\n}\n\n// Stop early with a clear message if the sheet is missing something this lane needs.\nconst required = [\"DEMO_MODE\",\"DEMO_MINUTES_PER_DAY\",\"LAUNCH_DATE\",\"LAUNCH_TIME\",\"EARLY_ACCESS_DAYS\",\"WAITLIST_FORM_URL\",\"SENDER_NAME\",\"SENDER_EMAIL\",\"ALLOWED_DEMO_INBOXES\",\"MAX_SENDS_PER_RUN\",\"SEND_DELAY_SECONDS\",\"MIN_EMAIL_GAP_DAYS\",\"UNSUBSCRIBE_LINE\"];\nconst missing = required.filter((key) => settings[key] === undefined || settings[key] === '');\nif (missing.length) {\n  throw new Error(`The SETTINGS tab is missing a value for: ${missing.join(', ')}`);\n}\n\n// Derived values (SPEC section 5.3). Sheet booleans may come back as true or \"TRUE\".\nsettings.IS_DEMO = String(settings.DEMO_MODE).trim().toUpperCase() === 'TRUE';\nconst demoMinutes = Number(settings.DEMO_MINUTES_PER_DAY);\nif (settings.IS_DEMO && !(demoMinutes > 0)) {\n  throw new Error('DEMO_MINUTES_PER_DAY must be a number above 0 when DEMO_MODE is TRUE');\n}\nsettings.DAY_MS = settings.IS_DEMO ? demoMinutes * 60 * 1000 : 24 * 60 * 60 * 1000;\n\nreturn [{ json: settings }];"
+      },
+      "notes": "Rows → one settings item",
+      "notesInFlow": true,
+      "id": "046f3b3c-84d7-529f-a84e-0eccd2534588",
+      "position": [
+        440,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Read LEADS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of LEADS",
+      "notesInFlow": true,
+      "id": "95145b49-79ef-53e1-a181-b9fddb16b418",
+      "position": [
+        660,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Read SEQUENCES",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SEQUENCES",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of SEQUENCES",
+      "notesInFlow": true,
+      "id": "cf59b6c8-91b7-58e9-a2c6-4799bcc9635e",
+      "position": [
+        880,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Read BRIEF",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BRIEF",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of BRIEF",
+      "notesInFlow": true,
+      "id": "d51c8f21-3b80-5fc1-ac50-1aa36030052e",
+      "position": [
+        1100,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Pick due leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Works out which leads are due for their next WAITLIST_NURTURE email and prepares everything the loop needs\n// (rendered subject + HTML, recipient, what to write back). One output item per lead; nothing due = no items = quiet end.\nconst S = $('Lane 4 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\n// ---- template renderer (SPEC 5.11)\nconst escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nfunction render(template, values) {\n  const missing = new Set();\n  const text = String(template ?? '').replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (token, key) => {\n    if (values[key] === undefined || values[key] === null || String(values[key]).trim() === '') { missing.add(key); return token; }\n    return String(values[key]);\n  });\n  return { text, missing: [...missing] };\n}\nconst now = $now.setZone(TZ);\nconst SEQUENCE_ID = 'WAITLIST_NURTURE';\n\nconst leads = rowsOf('Lane 4 · Read LEADS');\nconst steps = rowsOf('Lane 4 · Read SEQUENCES')\n  .filter((row) => String(row.sequence_id).trim() === SEQUENCE_ID && isTrue(row.active))\n  .map((row) => ({ ...row, step: Number(row.step) }))\n  .filter((row) => Number.isInteger(row.step) && row.step > 0)\n  .sort((a, b) => a.step - b.step);\nconst stepByNumber = new Map(steps.map((row) => [row.step, row]));\n\n// ---- BRIEF values used as placeholders. BRIEF text may itself contain {{launch_date}} style tokens, so fill those first.\nconst realLaunch = parseDate(S.LAUNCH_DATE);\nconst dateText = (d) => (d ? d.setLocale('en').toFormat('cccc, d LLLL') : '');\nconst base = {\n  launch_date: dateText(realLaunch),\n  public_launch_date: dateText(realLaunch?.plus({ days: Number(S.EARLY_ACCESS_DAYS) })),\n  waitlist_form_url: S.WAITLIST_FORM_URL,\n  sender_name: S.SENDER_NAME,\n  unsubscribe_line: S.UNSUBSCRIBE_LINE,\n};\nconst brief = {};\nfor (const row of rowsOf('Lane 4 · Read BRIEF')) {\n  const key = String(row.key ?? '').trim();\n  if (key) brief[key] = String(row.value ?? '').trim();\n}\n// The discount code is only revealed by Lane 5 on launch day, so it is never a Lane 4 placeholder.\nconst briefValues = {};\nfor (const key of ['brand_name', 'brand_instagram', 'collection_name', 'founder_name', 'offer_percent']) {\n  if (brief[key] !== undefined) briefValues[key] = render(brief[key], base).text;\n}\nconst common = { ...base, ...briefValues };\n\nconst out = [];\nconst problem = (lead, message, extra = {}) => out.push({ json: { action: 'skip', needs_email: false, lead_id: String(lead?.lead_id ?? '').trim(), row_number: lead?.row_number ?? '', pick_error: message, ...extra } });\n\nif (!steps.length) {\n  // No active steps at all means SEQUENCES is misconfigured, so do NOT mark anyone as finished.\n  const anyDue = leads.some((lead) => ['new', 'nurturing'].includes(String(lead.status).trim()) && isTrue(lead.consent));\n  if (anyDue) problem(null, `no active ${SEQUENCE_ID} steps in SEQUENCES`, { entity_type: 'sequence', entity_id: SEQUENCE_ID });\n  return out;\n}\n\nconst candidates = [];\nfor (const lead of leads) {\n  const status = String(lead.status ?? '').trim();\n  if (!['new', 'nurturing'].includes(status)) continue;\n  if (!isTrue(lead.consent)) continue;\n  if (String(lead.email_allowed ?? '').trim().toUpperCase() === 'FALSE') continue;\n  const nextRaw = String(lead.next_action_at ?? '').trim();\n  const lastRaw = String(lead.last_contacted_at ?? '').trim();\n  const bad = [];\n  if (nextRaw && !parseTs(nextRaw)) bad.push('next_action_at');\n  if (lastRaw && !parseTs(lastRaw)) bad.push('last_contacted_at');\n  if (bad.length) { problem(lead, `invalid value in ${bad.join(', ')}`); continue; }\n  const next = parseTs(nextRaw);\n  if (next && next.toMillis() > now.toMillis()) continue;      // not due yet\n  if (!gapOk(lead, now)) continue;                              // too soon after the last email of any lane\n  candidates.push({ lead, sortKey: next ? next.toMillis() : 0 });\n}\ncandidates.sort((a, b) => a.sortKey - b.sortKey);\n\nlet sends = 0;\nconst maxSends = Math.max(0, Number(S.MAX_SENDS_PER_RUN) || 0);\nfor (const { lead } of candidates) {\n  const leadId = String(lead.lead_id ?? '').trim();\n  const email = String(lead.email ?? '').trim().toLowerCase();\n  const missingFields = [];\n  if (!leadId) missingFields.push('lead_id');\n  if (!email) missingFields.push('email');\n  const seqStepRaw = String(lead.seq_step ?? '').trim();\n  const seqStep = seqStepRaw === '' ? 0 : Number(seqStepRaw);\n  if (!Number.isInteger(seqStep) || seqStep < 0) missingFields.push('seq_step');\n  if (missingFields.length) { problem(lead, `missing or invalid ${missingFields.join(', ')}`); continue; }\n\n  const step = seqStep + 1;\n  const stepRow = stepByNumber.get(step);\n  const status = String(lead.status).trim();\n  if (!stepRow) {\n    out.push({ json: { action: 'complete', needs_email: false, lead_id: leadId, status_from: status, sequence_id: SEQUENCE_ID, step: seqStep } });\n    continue;\n  }\n  if (sends >= maxSends) break;\n\n  const text = render(stepRow.subject_template, { ...common, first_name: lead.first_name, city: lead.city });\n  const html = render(stepRow.body_template, {\n    ...common, first_name: escapeHtml(lead.first_name), city: escapeHtml(lead.city),\n  });\n  const missingTokens = [...new Set([...text.missing, ...html.missing])];\n  if (missingTokens.length) { problem(lead, `template ${stepRow.step_key} has empty or unknown placeholder(s): ${missingTokens.join(', ')}`); continue; }\n\n  const nextStep = stepByNumber.get(step + 1);\n  const isLast = !nextStep;\n  out.push({\n    json: {\n      action: 'send', needs_email: true, lead_id: leadId, to_email: email, subject: text.text.replace(/\\s+/g, ' ').trim(), html: html.text,\n      sender_name: S.SENDER_NAME, sequence_id: SEQUENCE_ID, step, step_key: stepRow.step_key, is_last: isLast,\n      next_delay_days: isLast ? null : Number(nextStep.delay_days),\n      status_from: status, thread_ids_before: String(lead.thread_ids ?? ''),\n    },\n  });\n  sends++;\n}\nreturn out;\n"
+      },
+      "notes": "Due, rendered, one per lead",
+      "notesInFlow": true,
+      "id": "ccc36247-890f-5c86-a51f-72fcb8b95057",
+      "position": [
+        1320,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Loop over leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "notes": "One lead per round",
+      "notesInFlow": true,
+      "id": "f62d4db2-dead-55bc-ae85-c6f9e5b697da",
+      "position": [
+        1540,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Needs email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "edd48d9f-d08c-5984-a5b5-489d2ffa95ab",
+              "leftValue": "={{ $json.needs_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "false = nothing to send",
+      "notesInFlow": true,
+      "id": "26bf9b0b-e7df-5eb1-a4cd-df1920e0a2ab",
+      "position": [
+        1760,
+        4160
+      ]
+    },
+    {
+      "name": "Lane 4 · Demo safety gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Lane 4 · Demo safety gate: input items carry the recipient in `to_email`.\nconst S = $('Lane 4 · Settings to object').first().json;\nconst PUBLIC = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.in', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'rediffmail.com', 'proton.me', 'protonmail.com'];\nconst list = (value) => String(value ?? '').toLowerCase().split(',').map((part) => part.trim()).filter(Boolean);\nfunction checkRecipient(email) {\n  const match = /^([a-z0-9._%-]+)(\\+[a-z0-9._%-]*)?@([a-z0-9.-]+\\.[a-z]{2,})$/.exec(email);\n  if (!match) return { ok: false, reason: 'not a single valid email address' };\n  const base = `${match[1]}@${match[3]}`;                      // plus-tag removed\n  const inboxes = [...list(S.ALLOWED_DEMO_INBOXES), ...list(S.SENDER_EMAIL)];\n  const domains = list(S.ALLOWED_EMAIL_DOMAINS).map((d) => d.replace(/^@/, '')).filter((d) => !PUBLIC.includes(d));\n  if (inboxes.includes(base)) return { ok: true, reason: 'demo inbox' };\n  if (domains.includes(match[3])) return { ok: true, reason: 'demo domain' };\n  return { ok: false, reason: 'not in ALLOWED_DEMO_INBOXES or ALLOWED_EMAIL_DOMAINS' };\n}\nreturn $input.all().map((item) => {\n  const to = String(item.json.to_email ?? '').trim().toLowerCase();\n  const check = checkRecipient(to);\n  return { json: { ...item.json, safe_to: check.ok ? to : '', gate_ok: check.ok, gate_reason: check.reason } };\n});\n"
+      },
+      "notes": "Is the address allowed?",
+      "notesInFlow": true,
+      "id": "d3d7163e-c059-5596-a13f-9663bb8f6c7b",
+      "position": [
+        1980,
+        4080
+      ]
+    },
+    {
+      "name": "Lane 4 · Recipient allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "912e4f7d-25e1-560f-a6ba-2f7ecf9c07ab",
+              "leftValue": "={{ $json.gate_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "true = may send",
+      "notesInFlow": true,
+      "id": "93d5c34f-fab9-54f0-ae5b-80a8435337bb",
+      "position": [
+        2200,
+        4080
+      ]
+    },
+    {
+      "name": "Lane 4 · Send nurture email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.safe_to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "={{ $json.sender_name }}"
+        }
+      },
+      "webhookId": "20106ab2-7fb0-578f-a168-3de8c7a75d9b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Kaya Demo · Gmail Sender"
+        }
+      },
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "notes": "Sends one email",
+      "notesInFlow": true,
+      "id": "446b1f65-5286-5d51-a782-6c7b594469df",
+      "position": [
+        2420,
+        4000
+      ]
+    },
+    {
+      "name": "Lane 4 · Decide outcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Runs once per lead, after the email step has finished one way or another (sent, send failed, blocked,\n// or nothing to send). Decides what to write back to LEADS and which events to log.\n// Only this node knows the outcome, so every branch of the loop meets here.\nconst S = $('Lane 4 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\nconst now = $now.setZone(TZ);\nconst input = $json;\n\nlet ctx;\nlet outcome;\nif (input.gate_ok === false) { ctx = input; outcome = 'blocked'; }\nelse if (input.action === 'complete' || input.action === 'skip') { ctx = input; outcome = input.action; }\nelse {\n  // Gmail's own output has no lead data, so fetch the item that went into Gmail (matched by n8n's item pairing).\n  ctx = $('Lane 4 · Recipient allowed?').item.json;\n  outcome = (input.error || !input.id) ? 'failed' : 'sent';\n}\n\nconst stamp = (d) => d.toFormat(STAMP);\nconst leadId = ctx.lead_id;\nconst update = { lead_id: leadId, updated_at: stamp(now) };\nconst events = [];\nlet hasUpdate = true;\n\nif (outcome === 'sent') {\n  const threads = String(ctx.thread_ids_before || '').split(',').map((t) => t.trim()).filter(Boolean);\n  if (input.threadId) threads.push(String(input.threadId));\n  const statusTo = ctx.is_last ? 'nurture_done' : 'nurturing';\n  Object.assign(update, {\n    seq_step: ctx.step, status: statusTo, last_contacted_at: stamp(now),\n    next_action_at: ctx.is_last ? '' : stamp(addDays(now, ctx.next_delay_days)),\n    thread_ids: threads.slice(-10).join(','),\n  });\n  events.push({ event_type: 'email_sent', entity_type: 'lead', entity_id: leadId, status_from: ctx.status_from, status_to: statusTo, channel: 'email',\n    detail: `${ctx.sequence_id} step ${ctx.step} sent`, meta: { sequence_id: ctx.sequence_id, step: ctx.step, thread_id: String(input.threadId ?? '') } });\n  if (ctx.is_last) events.push({ event_type: 'sequence_completed', entity_type: 'lead', entity_id: leadId, status_from: ctx.status_from, status_to: statusTo, channel: 'email',\n    detail: `${ctx.sequence_id} finished after step ${ctx.step}`, meta: { sequence_id: ctx.sequence_id } });\n} else if (outcome === 'failed') {\n  // Do not advance seq_step; try again a little later (0.1 day on the demo clock).\n  update.next_action_at = stamp(addDays(now, 0.1));\n  const message = typeof input.error === 'string' ? input.error : (input.error?.message || JSON.stringify(input.error ?? 'Gmail returned no message id'));\n  events.push({ event_type: 'email_failed', entity_type: 'lead', entity_id: leadId, channel: 'email',\n    detail: `${ctx.sequence_id} step ${ctx.step} not sent: ${message}`, meta: { sequence_id: ctx.sequence_id, step: ctx.step, error: String(message).slice(0, 300) } });\n} else if (outcome === 'blocked') {\n  Object.assign(update, { status: 'blocked', email_allowed: 'FALSE', next_action_at: '' });\n  events.push({ event_type: 'email_blocked', entity_type: 'lead', entity_id: leadId, status_from: ctx.status_from, status_to: 'blocked', channel: 'email',\n    detail: `${ctx.to_email} blocked by the safety gate: ${ctx.gate_reason}`, meta: { reason: ctx.gate_reason } });\n} else if (outcome === 'complete') {\n  Object.assign(update, { status: 'nurture_done', next_action_at: '' });\n  events.push({ event_type: 'sequence_completed', entity_type: 'lead', entity_id: leadId, status_from: ctx.status_from, status_to: 'nurture_done', channel: 'email',\n    detail: `${ctx.sequence_id} has no step ${ctx.step + 1}; sequence finished`, meta: { sequence_id: ctx.sequence_id } });\n} else {\n  // skip: bad row or bad template. Leave the row alone and say why.\n  hasUpdate = false;\n  events.push({ event_type: 'error', entity_type: ctx.entity_type || 'lead', entity_id: ctx.entity_id ?? ctx.lead_id ?? (ctx.row_number ? `row ${ctx.row_number}` : ''), channel: 'sheet',\n    detail: ctx.pick_error, meta: { node: 'Lane 4 · Pick due leads', message: ctx.pick_error } });\n}\n\nreturn { json: { outcome, lead_id: leadId, has_update: hasUpdate, row_update: update, events } };\n"
+      },
+      "notes": "All paths meet here",
+      "notesInFlow": true,
+      "id": "f422165c-e4d8-504a-a445-79eb7730edae",
+      "position": [
+        2860,
+        4160
+      ]
+    },
+    {
+      "name": "Lane 4 · Has row update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6fb43da0-b964-5b31-a2b9-856f67d5a70f",
+              "leftValue": "={{ $json.has_update }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "false = nothing to write",
+      "notesInFlow": true,
+      "id": "6219e380-12b0-5ac6-a4c3-9324d255a4f8",
+      "position": [
+        3080,
+        4160
+      ]
+    },
+    {
+      "name": "Lane 4 · Prepare lead update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// The Google Sheets update node writes every field it receives, so pass on ONLY the key column\n// and the columns this lane owns (SPEC 5.4).\nreturn { json: $json.row_update };\n"
+      },
+      "notes": "Only owned columns",
+      "notesInFlow": true,
+      "id": "3d2601f5-b354-5fbc-a81c-4114ffb665da",
+      "position": [
+        3300,
+        4080
+      ]
+    },
+    {
+      "name": "Lane 4 · Update LEAD row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_handle",
+              "displayName": "instagram_handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interest",
+              "displayName": "interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "occasion",
+              "displayName": "occasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_allowed",
+              "displayName": "email_allowed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment",
+              "displayName": "segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score_reason",
+              "displayName": "score_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sequence_id",
+              "displayName": "sequence_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seq_step",
+              "displayName": "seq_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "next_action_at",
+              "displayName": "next_action_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_contacted_at",
+              "displayName": "last_contacted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "launch_step",
+              "displayName": "launch_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_newsletter_id",
+              "displayName": "last_newsletter_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_ids",
+              "displayName": "thread_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reply_at",
+              "displayName": "last_reply_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply_class",
+              "displayName": "reply_class",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Right after the send",
+      "notesInFlow": true,
+      "id": "7dfdaab5-de14-53b8-acb4-5423464657b5",
+      "position": [
+        3520,
+        4080
+      ]
+    },
+    {
+      "name": "Lane 4 · Build log events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the outcome(s) of this loop round into EVENTS_LOG rows (SPEC 5.6).\nconst S = $('Lane 4 · Settings to object').first().json;\nconst TZ = 'Asia/Kolkata';\n// ---- event builder (SPEC 5.6)\nconst now = $now.setZone(TZ);\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 4,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst rows = [];\n$input.all().forEach((item, index) => {\n  const decided = $('Lane 4 · Decide outcome').itemMatching(index).json;\n  for (const e of decided.events) rows.push({ json: event(e) });\n});\nreturn rows;\n"
+      },
+      "notes": "One row per action",
+      "notesInFlow": true,
+      "id": "0991e5af-ee5b-5456-a090-0ff3241c8dbd",
+      "position": [
+        3740,
+        4160
+      ]
+    },
+    {
+      "name": "Lane 4 · Save to EVENTS_LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true,
+      "id": "f2334087-61d7-5d00-a85e-1069c76bd9c1",
+      "position": [
+        3960,
+        4160
+      ]
+    },
+    {
+      "name": "Lane 4 · Prepare pause",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Pause between two emails (SEND_DELAY_SECONDS). Only after an attempt to send; nothing else needs a pause.\nconst S = $('Lane 4 · Settings to object').first().json;\nconst attempted = $input.all().some((item) => ['email_sent', 'email_failed'].includes(item.json.event_type));\nreturn [{ json: { pause_seconds: attempted ? Math.min(60, Math.max(0, Number(S.SEND_DELAY_SECONDS) || 0)) : 0 } }];\n"
+      },
+      "notes": "SEND_DELAY_SECONDS",
+      "notesInFlow": true,
+      "id": "59742d38-098b-59ba-a1c8-9dedf7c4e12c",
+      "position": [
+        4180,
+        4160
+      ]
+    },
+    {
+      "name": "Lane 4 · Pause between emails",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "parameters": {
+        "amount": "={{ $json.pause_seconds }}",
+        "unit": "seconds"
+      },
+      "webhookId": "98fd4a90-49a1-5b6f-a242-baf24b0aa653",
+      "notes": "Then next lead",
+      "notesInFlow": true,
+      "id": "859e8a86-ff17-59b2-a3f5-67d02c749ce0",
+      "position": [
+        4400,
+        4160
+      ]
+    }
+  ],
+  "connections": {
+    "Lane 4 · Every minute": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Read SETTINGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Read SETTINGS": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Settings to object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Settings to object": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Read LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Read LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Read SEQUENCES",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Read SEQUENCES": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Read BRIEF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Read BRIEF": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Pick due leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Pick due leads": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Loop over leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Loop over leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Lane 4 · Needs email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Needs email?": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Demo safety gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 4 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Demo safety gate": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Recipient allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Recipient allowed?": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Send nurture email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 4 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Send nurture email": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 4 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Decide outcome": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Has row update?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Has row update?": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Prepare lead update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 4 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Prepare lead update": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Update LEAD row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Update LEAD row": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Build log events": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Save to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Save to EVENTS_LOG": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Prepare pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Prepare pause": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Pause between emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Pause between emails": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Loop over leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
