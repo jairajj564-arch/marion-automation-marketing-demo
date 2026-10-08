@@ -1,4 +1,28 @@
-# NODES.md: Lane 1 (Content engine), node by node
+# NODES.md: the whole canvas, node by node
+
+**Where each lane is explained** (every node: what it does and why):
+
+| Lane | Guide | Lane file | Trigger |
+|---|---|---|---|
+| 1 Content engine | this file (below) | `lanes/lane-1-content-engine.json` | manual: **Lane 1 · Start** |
+| 2 Publisher | [`docs/lane-2.md`](docs/lane-2.md) | `lanes/lane-2-publisher.json` | every minute |
+| 3 Lead engine | [`docs/lane-3.md`](docs/lane-3.md) | `lanes/lane-3-lead-engine.json` | form `/form/kaya-waitlist` |
+| 4 Sequence sender | [`docs/lane-4.md`](docs/lane-4.md) | `lanes/lane-4-sequence-sender.json` | every minute |
+| 5 Launch engine | [`docs/lane-5.md`](docs/lane-5.md) | `lanes/lane-5-launch-engine.json` | every minute |
+| 6 Outreach | [`docs/lane-6.md`](docs/lane-6.md) | `lanes/lane-6-outreach.json` | every 2 minutes |
+| 7 Inbox | [`docs/lane-7.md`](docs/lane-7.md) | `lanes/lane-7-inbox.json` | Gmail polling + form `/form/kaya-demo-reply` |
+| 8 Report | [`docs/lane-8.md`](docs/lane-8.md) | `lanes/lane-8-report.json` | every 5 minutes |
+
+**The one canvas** `lanes/marion-marketing-engine.json` holds all 8 lanes: one horizontal band per lane (Lane 1 at the top), each framed by a coloured sticky note `Lane N · <name>` with 2–3 lines on what it does, and the overview note `Canvas · Marion Enroute — Marketing Engine demo` above Lane 1 with the 5-step demo script. The lanes are not connected to each other; they only share the Google Sheet. It is built from the lane files by `node tools/build-canvas.mjs`, so the nodes are the same as in the lane files and in the guides.
+
+**Nodes added in session 5** (the merge), all explained in their lane's guide:
+* `Lane 4 · Re-read LEADS` → `Lane 4 · Check lead is still due` → `Lane 4 · Still due?` and `Lane 6 · Re-read PROSPECTS` → `Lane 6 · Check prospect is still due` → `Lane 6 · Still due?`: right before an email, the lane looks at the row again. If Lane 7 recorded a reply, or another lane emailed the person seconds ago, nothing is sent and Lane 7's status is kept.
+* Lanes 2 (newsletter) and 5 (launch emails) leave a lead to Lane 4 while its nurture email is due (code change inside `Pick newsletter recipients` / `Pick launch work`), so nobody gets two emails seconds apart.
+* `Lane 7 · Reply in Demo Customers inbox` now has **Reply to Sender Only**, and the demo form only accepts a known lead/prospect address.
+
+---
+
+# Lane 1 (Content engine), node by node
 
 This guide explains every node in `lanes/lane-1-content-engine.json`: what it does and **why it is there**. It assumes you are new to n8n. The rules behind the design are in `SPEC.md`; this file is the friendly tour.
 

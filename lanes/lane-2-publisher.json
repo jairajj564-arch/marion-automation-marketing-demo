@@ -80,7 +80,7 @@
       "name": "Lane 2 · Read SETTINGS",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -130,7 +130,7 @@
       "name": "Lane 2 · Read CONTENT",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -525,7 +525,7 @@
       "name": "Lane 2 · Update CONTENT with problem",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -704,7 +704,7 @@
       "name": "Lane 2 · Save problem to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -738,7 +738,7 @@
       "typeVersion": 2,
       "position": [
         1560,
-        1760
+        1620
       ],
       "id": "4d52a911-be9f-5543-84a8-80c14998a8da",
       "name": "Lane 2 · Build Telegram message",
@@ -759,14 +759,14 @@
       "typeVersion": 1.2,
       "position": [
         1780,
-        1760
+        1620
       ],
       "id": "68775264-8dc0-5bdb-8cbb-774a9a24888e",
       "name": "Lane 2 · Send to Telegram",
       "webhookId": "b8af4328-c990-5cb2-80b4-37332f891833",
       "credentials": {
         "telegramApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Telegram Bot"
         }
       },
@@ -785,7 +785,7 @@
       "typeVersion": 2,
       "position": [
         2000,
-        1760
+        1620
       ],
       "id": "e43d1471-99d1-5d62-863a-72c3813209d9",
       "name": "Lane 2 · Build publish result",
@@ -1049,13 +1049,13 @@
       "typeVersion": 4.5,
       "position": [
         2220,
-        1760
+        1620
       ],
       "id": "b0750a18-b30b-5a0a-81e2-6ac723495eef",
       "name": "Lane 2 · Update CONTENT after post",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1073,7 +1073,7 @@
       "typeVersion": 2,
       "position": [
         2440,
-        1760
+        1620
       ],
       "id": "bc82ac02-6249-5aeb-83de-bc7f42431dcf",
       "name": "Lane 2 · Build post log",
@@ -1228,13 +1228,13 @@
       "typeVersion": 4.5,
       "position": [
         2660,
-        1760
+        1620
       ],
       "id": "f19b1c42-8da4-5a47-82d8-9bf3956f1b11",
       "name": "Lane 2 · Save post to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1558,7 +1558,7 @@
       "name": "Lane 2 · Mark newsletter publishing",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1593,7 +1593,7 @@
       "name": "Lane 2 · Read LEADS",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1744,7 +1744,7 @@
       "name": "Lane 2 · Send newsletter email",
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Sender"
         }
       },
@@ -2058,7 +2058,7 @@
       "name": "Lane 2 · Update LEAD after send",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -2373,7 +2373,7 @@
       "name": "Lane 2 · Update LEAD as blocked",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -2552,7 +2552,7 @@
       "name": "Lane 2 · Save send to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -2857,7 +2857,7 @@
       "name": "Lane 2 · Update CONTENT after newsletter",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -3036,7 +3036,7 @@
       "name": "Lane 2 · Save newsletter done to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },

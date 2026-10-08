@@ -80,7 +80,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -130,7 +130,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -165,7 +165,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -202,7 +202,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -369,7 +369,7 @@
       },
       "credentials": {
         "googlePalmApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gemini"
         }
       },
@@ -469,7 +469,7 @@
       },
       "credentials": {
         "groqApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Groq"
         }
       },
@@ -586,7 +586,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -723,7 +723,7 @@
       },
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Sender"
         }
       },
@@ -768,8 +768,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4120,
-        7000
+        3880,
+        6880
       ],
       "parameters": {
         "jsCode": "// The safety gate said no: tag the prospect so the row becomes status blocked.\nreturn [{ json: { ...$input.first().json, outcome: 'blocked' } }];\n"
@@ -787,7 +787,7 @@
         6800
       ],
       "parameters": {
-        "jsCode": "// Every path meets here: sent, failed, blocked, skip, complete. For each, decide\n//  (a) the changes to the PROSPECTS row (only the columns this lane owns),\n//  (b) the events to log, (c) how long to pause afterwards.\nconst S = $('Lane 6 · Settings to object').first().json;\nconst job = $input.first().json;\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst now = $now.setZone(TZ);\nconst ts = now.toFormat(STAMP);\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nconst csv = (value) => String(value ?? '').split(',').map((part) => part.trim()).filter(Boolean);\n\nconst id = job.prospect_id;\nconst log = [];\nconst ai = job.ai || { used: false };\nif (ai.used) {\n  const meta = { provider: ai.provider, model: ai.model, ok: ai.ok, purpose: 'outreach_opener', duration_ms: ai.duration_ms };\n  log.push({ event_type: 'ai_call', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai', detail: `Outreach opener for ${id}: ${ai.ok ? 'ok' : 'failed'} via ${ai.provider}`, meta });\n  if (ai.provider === 'groq') log.push({ event_type: 'ai_fallback', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai', detail: `Gemini failed, used Groq: ${ai.fallback_reason}`, meta: { ...meta, reason: ai.fallback_reason } });\n  if (!ai.ok) log.push({ event_type: 'ai_failed', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai', detail: `${ai.error} (template opener used)`, meta: { ...meta, error: ai.error } });\n}\nlet update;\nlet pause = ai.used ? Number(S.AI_WAIT_SECONDS) || 0 : 0;\n\nif (job.outcome === 'sent') {\n  const threadIds = csv(job.thread_ids);\n  if (job.thread_id && !threadIds.includes(job.thread_id)) threadIds.push(job.thread_id);\n  const statusTo = job.is_last ? 'sequence_done' : 'contacted';\n  update = {\n    prospect_id: id, seq_step: job.step, status: statusTo, last_contacted_at: ts,\n    next_action_at: job.is_last ? '' : addDays(now, job.next_delay_days).toFormat(STAMP),\n    thread_ids: threadIds.slice(-10).join(','), updated_at: ts,\n  };\n  log.push({ event_type: 'email_sent', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: statusTo, channel: 'email', detail: `${job.sequence_id} step ${job.step} sent${ai.used ? (ai.ok ? ' (AI opener)' : ' (template opener)') : ''}`, meta: { sequence_id: job.sequence_id, step: job.step, thread_id: job.thread_id } });\n  if (job.is_last) log.push({ event_type: 'sequence_completed', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: statusTo, channel: 'email', detail: `${job.sequence_id} finished`, meta: { sequence_id: job.sequence_id } });\n  pause += Number(S.SEND_DELAY_SECONDS) || 0;\n} else if (job.outcome === 'blocked') {\n  update = { prospect_id: id, status: 'blocked', email_allowed: 'FALSE', next_action_at: '', updated_at: ts };\n  log.push({ event_type: 'email_blocked', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: 'blocked', channel: 'email', detail: `Safety gate blocked ${job.to_email}: ${job.gate_reason}`, meta: { reason: job.gate_reason } });\n} else if (job.outcome === 'failed') {\n  update = { prospect_id: id, next_action_at: addDays(now, 0.1).toFormat(STAMP), updated_at: ts };\n  log.push({ event_type: 'email_failed', entity_type: 'prospect', entity_id: id, channel: 'email', detail: `Gmail send failed, will retry later: ${job.error}`, meta: { error: job.error, sequence_id: job.sequence_id, step: job.step } });\n  pause += Number(S.SEND_DELAY_SECONDS) || 0;\n} else if (job.outcome === 'skip') {\n  update = { prospect_id: id, next_action_at: addDays(now, job.defer_days).toFormat(STAMP), updated_at: ts };\n  log.push({ event_type: 'error', entity_type: 'prospect', entity_id: id, channel: job.error_node === 'Lane 6 · Render email' ? 'email' : 'sheet', detail: `Skipped ${id}: ${job.reason}`, meta: { node: job.error_node, message: job.reason } });\n} else if (job.outcome === 'complete') {\n  update = { prospect_id: id, status: 'sequence_done', next_action_at: '', updated_at: ts };\n  log.push({ event_type: 'sequence_completed', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: 'sequence_done', channel: 'sheet', detail: `${job.sequence_id} has no further active step`, meta: { sequence_id: job.sequence_id } });\n} else {\n  throw new Error(`Unknown outcome: ${job.outcome}`);\n}\nreturn [{ json: { outcome: job.outcome, prospect_id: id, update, log, pause_seconds: Math.min(60, Math.max(0, pause)) } }];\n"
+        "jsCode": "// Every path meets here: sent, failed, blocked, skip, complete. For each, decide\n//  (a) the changes to the PROSPECTS row (only the columns this lane owns),\n//  (b) the events to log, (c) how long to pause afterwards.\nconst S = $('Lane 6 · Settings to object').first().json;\nconst job = $input.first().json;\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst now = $now.setZone(TZ);\nconst ts = now.toFormat(STAMP);\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nconst csv = (value) => String(value ?? '').split(',').map((part) => part.trim()).filter(Boolean);\n\nconst id = job.prospect_id;\nconst log = [];\nconst ai = job.ai || { used: false };\nif (ai.used) {\n  const meta = { provider: ai.provider, model: ai.model, ok: ai.ok, purpose: 'outreach_opener', duration_ms: ai.duration_ms };\n  log.push({ event_type: 'ai_call', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai', detail: `Outreach opener for ${id}: ${ai.ok ? 'ok' : 'failed'} via ${ai.provider}`, meta });\n  if (ai.provider === 'groq') log.push({ event_type: 'ai_fallback', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai', detail: `Gemini failed, used Groq: ${ai.fallback_reason}`, meta: { ...meta, reason: ai.fallback_reason } });\n  if (!ai.ok) log.push({ event_type: 'ai_failed', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai', detail: `${ai.error} (template opener used)`, meta: { ...meta, error: ai.error } });\n}\nlet update;\nlet pause = ai.used ? Number(S.AI_WAIT_SECONDS) || 0 : 0;\n\nif (job.outcome === 'sent') {\n  const threadIds = csv(job.thread_ids);\n  if (job.thread_id && !threadIds.includes(job.thread_id)) threadIds.push(job.thread_id);\n  const statusTo = job.is_last ? 'sequence_done' : 'contacted';\n  update = {\n    prospect_id: id, seq_step: job.step, status: statusTo, last_contacted_at: ts,\n    next_action_at: job.is_last ? '' : addDays(now, job.next_delay_days).toFormat(STAMP),\n    thread_ids: threadIds.slice(-10).join(','), updated_at: ts,\n  };\n  log.push({ event_type: 'email_sent', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: statusTo, channel: 'email', detail: `${job.sequence_id} step ${job.step} sent${ai.used ? (ai.ok ? ' (AI opener)' : ' (template opener)') : ''}`, meta: { sequence_id: job.sequence_id, step: job.step, thread_id: job.thread_id } });\n  if (job.is_last) log.push({ event_type: 'sequence_completed', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: statusTo, channel: 'email', detail: `${job.sequence_id} finished`, meta: { sequence_id: job.sequence_id } });\n  pause += Number(S.SEND_DELAY_SECONDS) || 0;\n} else if (job.outcome === 'blocked') {\n  update = { prospect_id: id, status: 'blocked', email_allowed: 'FALSE', next_action_at: '', updated_at: ts };\n  log.push({ event_type: 'email_blocked', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: 'blocked', channel: 'email', detail: `Safety gate blocked ${job.to_email}: ${job.gate_reason}`, meta: { reason: job.gate_reason } });\n} else if (job.outcome === 'failed') {\n  update = { prospect_id: id, next_action_at: addDays(now, 0.1).toFormat(STAMP), updated_at: ts };\n  log.push({ event_type: 'email_failed', entity_type: 'prospect', entity_id: id, channel: 'email', detail: `Gmail send failed, will retry later: ${job.error}`, meta: { error: job.error, sequence_id: job.sequence_id, step: job.step } });\n  pause += Number(S.SEND_DELAY_SECONDS) || 0;\n} else if (job.outcome === 'skip') {\n  update = { prospect_id: id, next_action_at: addDays(now, job.defer_days).toFormat(STAMP), updated_at: ts };\n  log.push({ event_type: 'error', entity_type: 'prospect', entity_id: id, channel: job.error_node === 'Lane 6 · Render email' ? 'email' : 'sheet', detail: `Skipped ${id}: ${job.reason}`, meta: { node: job.error_node, message: job.reason } });\n} else if (job.outcome === 'complete') {\n  update = { prospect_id: id, status: 'sequence_done', next_action_at: '', updated_at: ts };\n  log.push({ event_type: 'sequence_completed', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: 'sequence_done', channel: 'email', detail: `${job.sequence_id} has no further active step`, meta: { sequence_id: job.sequence_id } });\n} else {\n  throw new Error(`Unknown outcome: ${job.outcome}`);\n}\nreturn [{ json: { outcome: job.outcome, prospect_id: id, update, log, pause_seconds: Math.min(60, Math.max(0, pause)) } }];\n"
       },
       "notes": "Row update + log plan",
       "notesInFlow": true
@@ -1044,7 +1044,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1223,7 +1223,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },

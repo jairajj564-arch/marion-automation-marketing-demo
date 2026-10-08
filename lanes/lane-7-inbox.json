@@ -28,8 +28,8 @@
       ],
       "parameters": {
         "content": "### Demo helper: pretend the customer replied\nOpen the form (`/form/kaya-demo-reply`), type the plus-address the email was sent to (e.g. `kayademo.customers+boutique1@gmail.com`) and pick **Interested / Question / Not now / Unsubscribe**. The flow finds the newest email from the sender to that address in the *Demo Customers* mailbox and replies **in the same Gmail thread** (`Reply to Sender Only` on, so it goes to the sender address only, through the safety gate). The reply comes FROM the bare demo inbox, so the top flow matches it by that thread a minute later.",
-        "height": 300,
-        "width": 3300,
+        "height": 360,
+        "width": 3400,
         "color": 7
       }
     },
@@ -78,7 +78,7 @@
       },
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Sender"
         }
       },
@@ -163,7 +163,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -214,7 +214,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -251,7 +251,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -339,7 +339,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -376,7 +376,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -507,7 +507,7 @@
       },
       "credentials": {
         "googlePalmApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gemini"
         }
       },
@@ -607,7 +607,7 @@
       },
       "credentials": {
         "groqApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Groq"
         }
       },
@@ -1024,7 +1024,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1287,7 +1287,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1369,7 +1369,7 @@
       },
       "credentials": {
         "telegramApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Telegram Bot"
         }
       },
@@ -1412,7 +1412,7 @@
       },
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Sender"
         }
       },
@@ -1589,7 +1589,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1704,7 +1704,7 @@
       },
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Demo Customers"
         }
       },
@@ -1839,7 +1839,7 @@
       },
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Demo Customers"
         }
       },
@@ -2017,7 +2017,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },

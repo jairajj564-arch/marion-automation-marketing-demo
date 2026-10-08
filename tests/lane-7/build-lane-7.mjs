@@ -20,7 +20,7 @@ L.sticky('Inbox', -240, TOP, 6300, 1000, `## 📬 Lane 7 · Inbox  ·  trigger: 
 **Reads:** SETTINGS, LEADS, PROSPECTS, EVENTS_LOG, BRIEF.  **Writes:** LEADS (\`status, last_reply_at, reply_class, next_action_at, notes, updated_at\`), PROSPECTS (\`status, last_reply_at, reply_class, next_action_at, deal_notes, updated_at\`), EVENTS_LOG.
 **Credentials:** Kaya Demo · Google Sheets / Gmail Sender / Gmail Demo Customers / Gemini / Groq / Telegram Bot.  **Docs:** SPEC.md §7.7 · docs/lane-7.md explains every node.`, 5);
 
-L.sticky('Demo reply helper', -200, YB - 130, 3300, 300, `### Demo helper: pretend the customer replied
+L.sticky('Demo reply helper', -200, YB - 130, 3400, 360, `### Demo helper: pretend the customer replied
 Open the form (\`/form/kaya-demo-reply\`), type the plus-address the email was sent to (e.g. \`kayademo.customers+boutique1@gmail.com\`) and pick **Interested / Question / Not now / Unsubscribe**. The flow finds the newest email from the sender to that address in the *Demo Customers* mailbox and replies **in the same Gmail thread** (\`Reply to Sender Only\` on, so it goes to the sender address only, through the safety gate). The reply comes FROM the bare demo inbox, so the top flow matches it by that thread a minute later.`, 7);
 
 L.sticky('Message handling', 2050, Y + 120, 1450, 140, `### One message at a time
@@ -31,7 +31,7 @@ const gmailTrigger = L.add({
   name: L.name('New email in sender inbox'),
   type: 'n8n-nodes-base.gmailTrigger', typeVersion: 1.2, position: [0, Y],
   parameters: { pollTimes: { item: [{ mode: 'everyMinute' }] }, simple: false, filters: { labelIds: ['INBOX'], readStatus: 'unread', q: '-from:me' }, options: {} },
-  credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Sender' } },
+  credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Sender' } },
   notes: 'Polls every minute', notesInFlow: true,
 });
 const formTrigger = L.add({
@@ -573,7 +573,7 @@ const markRead = L.add({
   name: L.name('Mark message read'),
   type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [5320, Y],
   parameters: { resource: 'message', operation: 'markAsRead', messageId: '={{ $json.message_id }}' },
-  credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Sender' } },
+  credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Sender' } },
   onError: 'continueRegularOutput',
   notes: 'Gmail: mark as read', notesInFlow: true,
 });
@@ -646,7 +646,7 @@ const findMail = L.add({
   name: L.name('Find latest email sent to address'),
   type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [1710, YB],
   parameters: { resource: 'message', operation: 'getAll', returnAll: false, limit: 1, simple: true, filters: { q: '={{ $json.q }}' }, options: {} },
-  credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Demo Customers' } },
+  credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Demo Customers' } },
   alwaysOutputData: true, retryOnFail: true, maxTries: 2, waitBetweenTries: 2000,
   notes: 'Demo Customers mailbox', notesInFlow: true,
 });
@@ -685,7 +685,7 @@ const reply = L.add({
   name: L.name('Reply in Demo Customers inbox'),
   type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [2660, YB],
   parameters: { resource: 'message', operation: 'reply', messageId: '={{ $json.message_id }}', emailType: 'html', message: '={{ $json.html }}', options: { appendAttribution: false, replyToSenderOnly: true } },
-  credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Demo Customers' } },
+  credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Demo Customers' } },
   retryOnFail: false, onError: 'continueErrorOutput',
   notes: 'Gmail reply · never retried', notesInFlow: true,
 });

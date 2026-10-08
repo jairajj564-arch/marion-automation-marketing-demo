@@ -23,7 +23,7 @@ const sheetRef = (tab) => ({
   documentId: { __rl: true, value: '__KAYA_SHEET_ID__', mode: 'id' },
   sheetName: { __rl: true, value: tab, mode: 'name' },
 });
-const sheetsCred = { googleSheetsOAuth2Api: { id: '', name: 'Kaya Demo · Google Sheets' } };
+const sheetsCred = { googleSheetsOAuth2Api: { id: null, name: 'Kaya Demo · Google Sheets' } };
 const retry = { retryOnFail: true, maxTries: 3, waitBetweenTries: 3000 };
 
 export class Lane {
@@ -150,7 +150,7 @@ export class Lane {
         emailType: 'html', message: '={{ $json.html }}',
         options: { appendAttribution: false, senderName: '={{ $json.sender_name }}' },
       },
-      x, y, webhookId: uuid(`${this.n}|${short}|wh`), credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Sender' } },
+      x, y, webhookId: uuid(`${this.n}|${short}|wh`), credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Sender' } },
       retryOnFail: false, onError: 'continueErrorOutput', notes: note ?? 'Sends one email', notesInFlow: true,
     });
   }
@@ -158,7 +158,7 @@ export class Lane {
     return this.add({
       name: this.name(short), type: 'n8n-nodes-base.telegram', typeVersion: 1.2,
       parameters: { chatId: '={{ $json.chat_id }}', text: '={{ $json.text }}', additionalFields: { appendAttribution: false, parse_mode: 'HTML', disable_web_page_preview: true } },
-      x, y, webhookId: uuid(`${this.n}|${short}|wh`), credentials: { telegramApi: { id: '', name: 'Kaya Demo · Telegram Bot' } },
+      x, y, webhookId: uuid(`${this.n}|${short}|wh`), credentials: { telegramApi: { id: null, name: 'Kaya Demo · Telegram Bot' } },
       ...retry, onError: failureOutput ? 'continueErrorOutput' : 'continueRegularOutput', notes: note, notesInFlow: Boolean(note),
     });
   }
@@ -173,7 +173,7 @@ export class Lane {
         sendBody: true, specifyBody: 'json', jsonBody: gem ? '={{ JSON.stringify($json.gemini_body) }}' : '={{ JSON.stringify($json.groq_body) }}',
         options: { timeout: 120000 },
       },
-      x, y, credentials: gem ? { googlePalmApi: { id: '', name: 'Kaya Demo · Gemini' } } : { groqApi: { id: '', name: 'Kaya Demo · Groq' } },
+      x, y, credentials: gem ? { googlePalmApi: { id: null, name: 'Kaya Demo · Gemini' } } : { groqApi: { id: null, name: 'Kaya Demo · Groq' } },
       retryOnFail: true, maxTries: 3, waitBetweenTries: 5000, onError: 'continueRegularOutput',
       notes: note ?? (gem ? 'Main AI · 3 tries' : 'Fallback AI · 3 tries'), notesInFlow: true,
     });

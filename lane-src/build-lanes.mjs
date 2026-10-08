@@ -65,7 +65,7 @@ class Lane {
       parameters.options = operation === 'append' ? { cellFormat: 'RAW', handlingExtraData: 'ignoreIt' } : { cellFormat: 'RAW' };
     }
     return this.add(short, 'n8n-nodes-base.googleSheets', 4.5, x, y, parameters, {
-      credentials: { googleSheetsOAuth2Api: { id: '', name: 'Kaya Demo · Google Sheets' } },
+      credentials: { googleSheetsOAuth2Api: { id: null, name: 'Kaya Demo · Google Sheets' } },
       retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, notes: note, notesInFlow: true, ...(opts.alwaysOutputData ? { alwaysOutputData: true } : {}),
     });
   }
@@ -82,7 +82,7 @@ class Lane {
       chatId: '={{ $json.chat_id }}', text: '={{ $json.text }}',
       additionalFields: { appendAttribution: false, parse_mode: 'HTML', disable_web_page_preview: true },
     }, {
-      webhookId: uuid(`${this.n}|${short}|webhook`), credentials: { telegramApi: { id: '', name: 'Kaya Demo · Telegram Bot' } },
+      webhookId: uuid(`${this.n}|${short}|webhook`), credentials: { telegramApi: { id: null, name: 'Kaya Demo · Telegram Bot' } },
       retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, onError, notes: note, notesInFlow: true,
     });
   }
@@ -130,12 +130,12 @@ function buildLane2() {
 
   // ---- posts branch (output 0)
   const ploop = L.loop('Loop over posts', 1340, 460, 'One post at a time');
-  const pmsg = L.codeNode('Build Telegram message', 1560, 560, 'build-telegram-message.js', 'chat_id + text');
-  const psend = L.telegram('Send to Telegram', 1780, 560, 'Retries 3×, errors continue', 'continueErrorOutput');
-  const pres = L.codeNode('Build publish result', 2000, 560, 'build-publish-result.js', 'Success or failure');
-  const pupd = L.sheet('Update CONTENT after post', 2220, 560, 'CONTENT', 'update', 'Right after sending');
-  const plg = L.codeNode('Build post log', 2440, 560, 'build-post-log.js', 'content_published / publish_failed');
-  const psv = L.saveLog('Save post to EVENTS_LOG', 2660, 560);
+  const pmsg = L.codeNode('Build Telegram message', 1560, 420, 'build-telegram-message.js', 'chat_id + text');
+  const psend = L.telegram('Send to Telegram', 1780, 420, 'Retries 3×, errors continue', 'continueErrorOutput');
+  const pres = L.codeNode('Build publish result', 2000, 420, 'build-publish-result.js', 'Success or failure');
+  const pupd = L.sheet('Update CONTENT after post', 2220, 420, 'CONTENT', 'update', 'Right after sending');
+  const plg = L.codeNode('Build post log', 2440, 420, 'build-post-log.js', 'content_published / publish_failed');
+  const psv = L.saveLog('Save post to EVENTS_LOG', 2660, 420);
   L.connect(route, ploop, 0);
   L.connect(ploop, pmsg, 1);
   L.chain(pmsg, psend);
@@ -159,7 +159,7 @@ function buildLane2() {
   const gsend = L.add('Send newsletter email', 'n8n-nodes-base.gmail', 2.1, 3320, 560, {
     resource: 'message', operation: 'send', sendTo: '={{ $json.safe_to }}', subject: '={{ $json.subject }}',
     emailType: 'html', message: '={{ $json.html }}', options: { appendAttribution: false, senderName: '={{ $json.sender_name }}' },
-  }, { credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Sender' } }, retryOnFail: false, onError: 'continueErrorOutput', notes: 'No retry (could double-send)', notesInFlow: true });
+  }, { credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Sender' } }, retryOnFail: false, onError: 'continueErrorOutput', notes: 'No retry (could double-send)', notesInFlow: true });
   const blead = L.codeNode('Build lead update', 3540, 540, 'build-lead-update.js', 'Owned LEADS columns');
   const ulead = L.sheet('Update LEAD after send', 3760, 540, 'LEADS', 'update', 'Before the next lead');
   const bblock = L.codeNode('Build blocked update', 3320, 760, 'build-blocked-update.js', 'blocked + FALSE');

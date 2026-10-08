@@ -75,7 +75,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -127,7 +127,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -164,7 +164,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -201,7 +201,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -301,7 +301,7 @@
       "webhookId": "9f12924d-cddd-5eb2-ab0c-ab0291deee49",
       "credentials": {
         "telegramApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Telegram Bot"
         }
       },
@@ -423,7 +423,7 @@
       "webhookId": "349026e5-0390-5946-a549-771bb478e8e6",
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gmail Sender"
         }
       },
@@ -646,7 +646,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -998,7 +998,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1177,7 +1177,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },

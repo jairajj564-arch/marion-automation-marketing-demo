@@ -439,7 +439,7 @@ const send = L.add({
   name: L.name('Send email'),
   type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [4540, Y],
   parameters: { resource: 'message', operation: 'send', sendTo: '={{ $json.safe_to }}', subject: '={{ $json.subject }}', emailType: 'html', message: '={{ $json.html }}', options: { appendAttribution: false, senderName: '={{ $json.sender_name }}' } },
-  credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Sender' } },
+  credentials: { gmailOAuth2: { id: null, name: 'Kaya Demo · Gmail Sender' } },
   retryOnFail: false, onError: 'continueErrorOutput',
   notes: 'Gmail send · never retried', notesInFlow: true,
 });
@@ -463,7 +463,7 @@ const result = $input.first().json;
 const error = typeof result.error === 'string' ? result.error : (result.error?.message || JSON.stringify(result).slice(0, 200));
 return [{ json: { ...job, outcome: 'failed', error: String(error).slice(0, 200) } }];
 `, 'Tag: failed');
-const markBlocked = L.code('Mark blocked', 4120, Y3 + 200, `// The safety gate said no: tag the prospect so the row becomes status blocked.
+const markBlocked = L.code('Mark blocked', 3880, Y3 + 80, `// The safety gate said no: tag the prospect so the row becomes status blocked.
 return [{ json: { ...$input.first().json, outcome: 'blocked' } }];
 `, 'Tag: blocked');
 L.link(send, markSent, 0);
@@ -517,7 +517,7 @@ if (job.outcome === 'sent') {
   log.push({ event_type: 'error', entity_type: 'prospect', entity_id: id, channel: job.error_node === 'Lane 6 · Render email' ? 'email' : 'sheet', detail: \`Skipped \${id}: \${job.reason}\`, meta: { node: job.error_node, message: job.reason } });
 } else if (job.outcome === 'complete') {
   update = { prospect_id: id, status: 'sequence_done', next_action_at: '', updated_at: ts };
-  log.push({ event_type: 'sequence_completed', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: 'sequence_done', channel: 'sheet', detail: \`\${job.sequence_id} has no further active step\`, meta: { sequence_id: job.sequence_id } });
+  log.push({ event_type: 'sequence_completed', entity_type: 'prospect', entity_id: id, status_from: job.status_from, status_to: 'sequence_done', channel: 'email', detail: \`\${job.sequence_id} has no further active step\`, meta: { sequence_id: job.sequence_id } });
 } else {
   throw new Error(\`Unknown outcome: \${job.outcome}\`);
 }

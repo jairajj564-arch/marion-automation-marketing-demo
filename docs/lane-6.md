@@ -145,6 +145,17 @@ Prospects that pass are sorted by `fit_score` (highest first) and only the top `
 **What:** true if rendering worked. False (template problem) goes to *Decide outcome*.
 **Why:** keeps unsendable emails away from the Gmail node.
 
+### Lane 6 · Re-read PROSPECTS *(Google Sheets, Read rows)* · added in session 5
+**What:** reads the PROSPECTS tab again, right before this prospect's email.
+**Why:** `Pick due prospects` read the sheet at the start of the run. With the AI opener and the pauses, a run can last up to ~100 seconds, and Lane 7 may have recorded a reply from this prospect in the meantime.
+
+### Lane 6 · Check prospect is still due *(Code)* · added in session 5
+**What:** finds the prospect in the fresh rows and checks: status still `new`/`contacted`, `seq_step` unchanged, and the gap rule still respected. Sets `still_due` (and `stale_reason`). It also takes the fresh `thread_ids`.
+**Why:** a prospect who has just replied (`replied`, `interested`, `not_interested`, `do_not_contact`) must not get the next email, and Lane 6's row update (`status = contacted`) must never overwrite the status Lane 7 set.
+
+### Lane 6 · Still due? *(IF)* · added in session 5
+**What:** true → safety gate and send as before. False → straight back to the loop: nothing is sent, written or logged for this prospect in this run.
+
 ### Lane 6 · Demo safety gate *(Code)*
 **What:** checks the recipient against `ALLOWED_DEMO_INBOXES`, `SENDER_EMAIL` and `ALLOWED_EMAIL_DOMAINS` (public domains such as gmail.com are ignored even if listed). Plus-addresses (`kayademo.customers+boutique4@gmail.com`) count as the base inbox. It writes `gate_ok` and `safe_to`.
 **Why:** this is the safety net of the whole project (SPEC 5.7). Even if someone types a real boutique's address into the sheet, no email can leave. The Gmail node can only ever send to `safe_to`, a value this node produced.

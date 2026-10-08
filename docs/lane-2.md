@@ -167,7 +167,7 @@ All sheet text is HTML-escaped (`&`, `<`, `>`), because the message is sent with
 **What:** from the LEADS rows it works out:
 * **Active leads** (SPEC 3.2): `status` is new / nurturing / nurture_done / replied / hot, `consent` is TRUE and `email_allowed` is not FALSE.
 * **Waiting**: active leads whose `last_newsletter_id` is not this newsletter.
-* **Ready**: waiting leads that pass the gap rule (`last_contacted_at` is at least `MIN_EMAIL_GAP_DAYS` ago, scaled by the demo clock). The first `MAX_SENDS_PER_RUN` of them become recipients.
+* **Ready**: waiting leads that pass the gap rule (`last_contacted_at` is at least `MIN_EMAIL_GAP_DAYS` ago, scaled by the demo clock) **and are not about to get a nurture email** (session 5 cross-lane guard: a lead with status `new`/`nurturing` whose `next_action_at` is blank or due within the next minute is left to Lane 4; Lane 4 starts at :15, while this run may still be sending, so the gap rule alone could not see that email). The first `MAX_SENDS_PER_RUN` of them become recipients. A reserved lead stays "waiting", so the newsletter stays `publishing` and the lead gets it on a later run.
 
 For each recipient it fills the placeholders (`{{first_name}}`, `{{unsubscribe_line}}`, …). The **subject** is plain text; the **body** is HTML, so names and settings are HTML-escaped before they go in (a name like `<b>` cannot inject markup). If the body has no `{{unsubscribe_line}}`, the line is added at the end. If nobody can be emailed this minute, it outputs a single "summary" item so the run can still decide whether the broadcast is finished. It also records how many leads were waiting before this run.
 **Why:** the whole "who gets what, and is it allowed?" decision is in one node, driven only by the sheet.

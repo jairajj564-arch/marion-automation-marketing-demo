@@ -13,7 +13,7 @@ Every minute → Read SETTINGS → Settings to object → Read LEADS → Read SE
                                                                                                                     │ (one lead per round)
    ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
    ▼
- Needs email? ─true→ Demo safety gate → Recipient allowed? ─true→ Send nurture email ─┬─ sent ───────┐
+ Needs email? ─true→ Re-read LEADS → Check lead is still due → Still due? ─true→ Demo safety gate → Recipient allowed? ─true→ Send nurture email ─┬─ sent ───────┐
       │ false (finish / bad row)                    │ false (blocked)                  └─ failed ─────┤
       └─────────────────────────────────────────────┴────────────────────────────────────────────────▼
                                                                                           Decide outcome
@@ -83,6 +83,17 @@ It outputs one item per lead with everything the loop needs. If nothing is due i
 ### Lane 4 · Needs email? *(IF)*
 **What:** true when the item is a lead to email; false for the "finish this sequence" and "bad row" items.
 **Why:** those two kinds skip the safety gate and Gmail and go straight to `Decide outcome`.
+
+### Lane 4 · Re-read LEADS *(Google Sheets, Read rows)* · added in session 5
+**What:** reads the LEADS tab again, right before this lead's email.
+**Why:** `Pick due leads` read the sheet at the start of the run, which can be up to ~45 seconds ago. Meanwhile other lanes may have touched this lead: Lane 7 may have marked it `hot`, `replied` or `unsubscribed` (a reply arrived), or Lane 2 / Lane 5 may have just emailed it (newsletter, launch email). The fresh copy lets the next node see that.
+
+### Lane 4 · Check lead is still due *(Code)* · added in session 5
+**What:** finds this lead in the fresh rows and checks: status still `new`/`nurturing`, `seq_step` unchanged, consent TRUE, not blocked, and the gap rule (`MIN_EMAIL_GAP_DAYS`) still respected. Sets `still_due` true or false (with the reason in `stale_reason`). It also takes the fresh `thread_ids`, so a thread another lane just added is kept.
+**Why:** without it, a lead who replied "stop" seconds ago could still get the next nurture email, and Lane 4's row update (`status = nurturing`) would overwrite Lane 7's `unsubscribed`.
+
+### Lane 4 · Still due? *(IF)* · added in session 5
+**What:** true → the safety gate and the email as before. False → straight back to the loop: nothing is sent, nothing is written, nothing is logged, and the next lead is handled. If the lead is still in the sequence, a later run picks it up again when it is due.
 
 ### Lane 4 · Demo safety gate *(Code)*
 **What:** looks at `to_email` and writes `safe_to`, `gate_ok` and `gate_reason`. An address is allowed only if it is one of `ALLOWED_DEMO_INBOXES` (or its `+tag` version), `SENDER_EMAIL`, or on a domain you own that is listed in `ALLOWED_EMAIL_DOMAINS` (public domains like gmail.com never count).

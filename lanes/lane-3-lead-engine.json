@@ -202,7 +202,7 @@
       "name": "Lane 3 · Read SETTINGS",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -447,7 +447,7 @@
       "name": "Lane 3 · Save error to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -482,7 +482,7 @@
       "name": "Lane 3 · Read LEADS",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -713,7 +713,7 @@
       "name": "Lane 3 · Save duplicate to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1057,7 +1057,7 @@
       "name": "Lane 3 · Save to LEADS",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1236,7 +1236,7 @@
       "name": "Lane 3 · Save to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -1282,7 +1282,7 @@
       "webhookId": "3fdf8528-4d4d-585c-89ee-3731576ee035",
       "credentials": {
         "telegramApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Telegram Bot"
         }
       },
@@ -1462,7 +1462,7 @@
       "name": "Lane 3 · Save alert to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },

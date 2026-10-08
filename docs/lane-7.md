@@ -193,7 +193,7 @@ An **out-of-office** reply is logged but changes nothing and sends no alert.
 ## The demo reply form flow
 
 ### Lane 7 · Read demo form answers *(Code)*
-**What:** reads the two answers, lower-cases the address, maps the reply type, checks both are valid, and looks the address up in LEADS and PROSPECTS (so the log can say *who* the pretend reply belongs to). It prepares the Gmail search `from:<SENDER_EMAIL> to:<address>`.
+**What:** reads the two answers, lower-cases the address, maps the reply type, checks both are valid, and looks the address up in LEADS and PROSPECTS (so the log can say *who* the pretend reply belongs to). It prepares the Gmail search `from:<SENDER_EMAIL> to:<address>`. **Session 5:** the address must be the email of a lead or prospect (type the exact plus-address, e.g. `kayademo.customers+boutique1@gmail.com`); the bare demo inbox is refused with a clear log line, because a reply can only be matched through the thread of a mail that went to a known row.
 **Why:** garbage in should give a clear log line, not a crash.
 
 ### Lane 7 · Demo form valid? *(IF)*
@@ -205,7 +205,7 @@ An **out-of-office** reply is logged but changes nothing and sends no alert.
 **Why:** to reply in the same Gmail thread, we need the id of that message.
 
 ### Lane 7 · Build demo reply *(Code)*
-**What:** checks the found mail really is from the sender, and prepares the canned reply text (Interested: "Yes please, this looks lovely. Could you send me the lookbook?", Question: "...tell me a bit more about how this would work for us?", Not now: "...Not now, but maybe later in the new year.", Unsubscribe: "Please unsubscribe me from these emails."). The reply's recipient is `SENDER_EMAIL`.
+**What:** checks the found mail really is from the sender, **was sent to exactly that address and has a Gmail thread id** (session 5), and prepares the canned reply text (Interested: "Yes please, this looks lovely. Could you send me the lookbook?", Question: "...tell me a bit more about how this would work for us?", Not now: "...Not now, but maybe later in the new year.", Unsubscribe: "Please unsubscribe me from these emails."). The reply's recipient is `SENDER_EMAIL`.
 **Why:** the canned texts are chosen so that even the keyword rules classify them correctly if the AI is down.
 
 ### Lane 7 · Message found? *(IF)*
@@ -217,8 +217,9 @@ An **out-of-office** reply is logged but changes nothing and sends no alert.
 **Why:** one rule for every Gmail send or reply on the canvas, checked by the validator.
 
 ### Lane 7 · Reply in Demo Customers inbox *(Gmail, Reply)*
-**What:** replies in the same thread, as the customer, with the canned text. No attribution footer. **Retry off**, **On Error: continue (using error output)**.
+**What:** replies in the same thread, as the customer, with the canned text. No attribution footer. **Reply to Sender Only** is on (session 5), so the reply goes to `SENDER_EMAIL` only: without it, n8n's reply also copies the original "To" (the plus-address) back to the Demo Customers inbox. **Retry off**, **On Error: continue (using error output)**.
 **Why:** retrying could send the pretend reply twice.
+**How the reply is matched (important):** Gmail's API always sends the reply FROM the account's own address, `kayademo.customers@gmail.com`, never from the plus-address, and that bare address matches no single row (all leads and prospects share it). The match works through the **thread**: n8n's reply carries `In-Reply-To`/`References` = the original message and the same subject, so the Kaya Jewels inbox files it in the thread of the email Lane 4/5/6 sent, and that thread id is in the row's `thread_ids`. The end-to-end test (`tests/e2e/`) models exactly this: two mailboxes with their own thread ids, threading by `In-Reply-To`.
 
 ### Lane 7 · Build demo log *(Code)*
 **What:** writes the one event for the helper: `demo_reply_simulated` (with the reply type), or `email_blocked` / `error` if something went wrong.

@@ -1,16 +1,22 @@
-# Import check (real lane files, dummy credentials, n8n 1.123.84)
+# Import check (n8n 1.123.84)
 
-```
-✔ ../lanes/lane-4-sequence-sender.json: imported 22/22 nodes, 7/7 credential references linked by name
-   6× Kaya Demo · Google Sheets (googleSheetsOAuth2Api) -> cred1
-   1× Kaya Demo · Gmail Sender (gmailOAuth2) -> cred2
-✔ ../lanes/lane-5-launch-engine.json: imported 27/27 nodes, 9/9 credential references linked by name
-   7× Kaya Demo · Google Sheets (googleSheetsOAuth2Api) -> cred1
-   1× Kaya Demo · Telegram Bot (telegramApi) -> cred6
-   1× Kaya Demo · Gmail Sender (gmailOAuth2) -> cred2
-✔ ../lanes/lane-8-report.json: imported 26/26 nodes, 10/10 credential references linked by name
-   7× Kaya Demo · Google Sheets (googleSheetsOAuth2Api) -> cred1
-   1× Kaya Demo · Gemini (googlePalmApi) -> cred4
-   1× Kaya Demo · Groq (groqApi) -> cred5
-   1× Kaya Demo · Telegram Bot (telegramApi) -> cred6
-```
+Run by `tests/e2e/import-check.mjs` (session 5). The six credentials were created first with dummy values and the exact SPEC names
+(`Kaya Demo · Google Sheets`, `Kaya Demo · Gmail Sender`, `Kaya Demo · Gmail Demo Customers`, `Kaya Demo · Gemini`, `Kaya Demo · Groq`, `Kaya Demo · Telegram Bot`).
+Every file was then imported with `n8n import:workflow` and exported again with `n8n export:workflow`.
+
+* **Linked by name** = the exported credential reference carries the id of the dummy credential with the same name and type (the files themselves have `"id": ""`).
+* **Round trip** = after export, every node (name, type, version, position, parameters, settings, webhook id) and every connection is identical to the file in the repo.
+
+| | File | Nodes | Credential references | Linked by name | Round trip identical |
+|---|---|---|---|---|---|
+| ✔ | `lanes/marion-marketing-engine.json` | 256 | 83 | 83 | yes |
+| ✔ | `lanes/lane-1-content-engine.json` | 25 | 7 | 7 | yes |
+| ✔ | `lanes/lane-2-publisher.json` | 40 | 15 | 15 | yes |
+| ✔ | `lanes/lane-3-lead-engine.json` | 24 | 8 | 8 | yes |
+| ✔ | `lanes/lane-4-sequence-sender.json` | 25 | 8 | 8 | yes |
+| ✔ | `lanes/lane-5-launch-engine.json` | 27 | 9 | 9 | yes |
+| ✔ | `lanes/lane-6-outreach.json` | 39 | 10 | 10 | yes |
+| ✔ | `lanes/lane-7-inbox.json` | 49 | 16 | 16 | yes |
+| ✔ | `lanes/lane-8-report.json` | 26 | 10 | 10 | yes |
+
+The import does not depend on the expression engine; both engines were exercised by running the canvas test copy end to end (`tests/e2e/RESULTS.md`).
