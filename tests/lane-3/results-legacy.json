@@ -27,7 +27,7 @@
   {
     "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
     "ok": true,
-    "message": "lead_id format LD-yyyyMMdd-XXXX (LD-20261008-LXHV)"
+    "message": "lead_id format LD-yyyyMMdd-XXXX (LD-20261009-IQM6)"
   },
   {
     "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
@@ -37,7 +37,7 @@
   {
     "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
     "ok": true,
-    "message": "timestamps in IST format, next_action_at = now (2026-10-08T19:50:01+05:30)"
+    "message": "timestamps in IST format, next_action_at = now (2026-10-09T00:56:20+05:30)"
   },
   {
     "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
