@@ -1,0 +1,13 @@
+event_id,ts,lane,event_type,entity_type,entity_id,status_from,status_to,channel,detail,meta_json,execution_id,demo_mode
+EV-20260926190041000-S001,2026-09-26T19:00:41+05:30,2,content_published,content,CNT-20260925-120000-01,approved,published,telegram_channel,ig_caption posted to the channel,"{""publish_ref"":""tg:101""}",sample,FALSE
+EV-20260927110038000-S002,2026-09-27T11:00:38+05:30,2,content_published,content,CNT-20260925-120000-02,approved,published,telegram_channel,short_post posted to the channel,"{""publish_ref"":""tg:102""}",sample,FALSE
+EV-20260930091244000-S003,2026-09-30T09:12:44+05:30,3,lead_captured,lead,LD-20260930-Q3M8,,new,form,"Priya (Pune) joined the waitlist, score 77 (hot)","{""score"":77,""segment"":""hot""}",sample,FALSE
+EV-20260930091245000-S004,2026-09-30T09:12:45+05:30,3,hot_alert_sent,lead,LD-20260930-Q3M8,,,telegram_owner,New hot lead alert sent,"{""score"":77}",sample,FALSE
+EV-20260930091330000-S005,2026-09-30T09:13:30+05:30,4,email_sent,lead,LD-20260930-Q3M8,new,nurturing,email,WAITLIST_NURTURE step 1 sent,"{""sequence_id"":""WAITLIST_NURTURE"",""step"":1}",sample,FALSE
+EV-20261003101422000-S008,2026-10-03T10:14:22+05:30,3,lead_captured,lead,LD-20261003-A7K2,,new,form,"Ananya (Mumbai) joined the waitlist, score 80 (hot)","{""score"":80,""segment"":""hot""}",sample,FALSE
+EV-20261003101505000-S009,2026-10-03T10:15:05+05:30,4,email_sent,lead,LD-20261003-A7K2,new,nurturing,email,WAITLIST_NURTURE step 1 sent,"{""sequence_id"":""WAITLIST_NURTURE"",""step"":1}",sample,FALSE
+EV-20261003130200000-S006,2026-10-03T13:02:00+05:30,7,reply_received,lead,LD-20260930-Q3M8,nurturing,hot,email,Reply classified as interested,"{""reply_class"":""interested""}",sample,FALSE
+EV-20261003130202000-S007,2026-10-03T13:02:02+05:30,7,hot_alert_sent,lead,LD-20260930-Q3M8,,,telegram_owner,Hot reply alert sent,"{""reply_class"":""interested""}",sample,FALSE
+EV-20261005162000000-S010,2026-10-05T16:20:00+05:30,7,reply_received,lead,LD-20261005-N5B2,nurturing,unsubscribed,email,Reply classified as unsubscribe,"{""reply_class"":""unsubscribe""}",sample,FALSE
+EV-20261006133321000-S011,2026-10-06T13:33:21+05:30,3,lead_captured,lead,LD-20261006-Z4E1,,blocked,form,Zoya (Bhopal) joined with a non-demo address; blocked by the safety gate,"{""score"":70,""segment"":""hot""}",sample,FALSE
+EV-20261006133321000-S012,2026-10-06T13:33:21+05:30,3,email_blocked,lead,LD-20261006-Z4E1,,,email,zoya.demo@example.com is not an allowed demo inbox,"{""reason"":""not_in_allowed_inboxes""}",sample,FALSE

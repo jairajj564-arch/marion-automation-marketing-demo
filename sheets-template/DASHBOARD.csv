@@ -1,0 +1,31 @@
+metric_key,label,value,unit,section,updated_at,notes
+content_total,Content items,,count,content,,All rows in CONTENT.
+content_pending_approval,Waiting for approval,,count,content,,status = pending_approval
+content_approved,"Approved, not yet published",,count,content,,status = approved or publishing
+content_published,Published,,count,content,,status = published
+content_avg_seo_score,Average SEO / quality score,,score,content,,Mean of seo_score over all rows.
+leads_total,Waitlist leads,,count,leads,,All rows in LEADS.
+leads_new_period,New leads since last report,,count,leads,,lead_captured events since the previous report.
+leads_hot,Hot leads,,count,leads,,segment = hot or status = hot
+leads_warm,Warm leads,,count,leads,,segment = warm
+leads_cold,Cold leads,,count,leads,,segment = cold
+leads_avg_score,Average lead score,,score,leads,,Mean of score.
+leads_unsubscribed,Unsubscribed leads,,count,leads,,status = unsubscribed
+leads_blocked,Blocked by safety gate,,count,leads,,status = blocked
+emails_sent_total,Emails sent (all lanes),,count,email,,"email_sent events, all time."
+emails_sent_period,Emails sent since last report,,count,email,,email_sent events since the previous report.
+emails_blocked_total,Emails blocked by safety gate,,count,email,,"email_blocked events, all time."
+launch_emails_sent,Launch emails sent,,count,email,,email_sent events from lane 5.
+prospects_total,Outreach prospects,,count,outreach,,All rows in PROSPECTS.
+prospects_contacted,Prospects contacted,,count,outreach,,seq_step >= 1
+prospects_replied,Prospects who replied,,count,outreach,,"status in replied, interested, not_interested, do_not_contact, won, lost"
+prospects_interested,Interested prospects,,count,outreach,,"status in interested, won"
+outreach_reply_rate_pct,Outreach reply rate,,percent,outreach,,"prospects_replied / prospects_contacted x 100, 1 decimal."
+replies_total,Replies received,,count,inbox,,"reply_received events, all time."
+hot_alerts_total,Hot alerts sent,,count,inbox,,"hot_alert_sent events, all time."
+channel_posts_total,Telegram channel posts,,count,publishing,,content_published (telegram_channel) + launch_post_published events.
+ai_calls_total,AI requests,,count,ai,,"ai_call events, all time."
+ai_fallbacks_total,AI fallbacks to Groq,,count,ai,,"ai_fallback events, all time."
+ai_failures_total,AI requests that failed,,count,ai,,"ai_failed events, all time."
+errors_period,Errors since last report,,count,system,,error events since the previous report.
+last_report_at,Last report sent,,timestamp,system,,Timestamp of this report.

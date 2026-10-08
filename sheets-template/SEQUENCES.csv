@@ -1,0 +1,80 @@
+step_key,sequence_id,step,channel,delay_days,delay_basis,subject_template,body_template,ai_personalize,active,broadcast_done_at,notes
+WAITLIST_NURTURE#1,WAITLIST_NURTURE,1,email,0,previous_step,"You're on the list, {{first_name}} ✨","<p>Hi {{first_name}},</p>
+<p>Thank you for joining the waitlist for <strong>{{collection_name}}</strong>, our Diwali 2026 collection, handmade in Jaipur.</p>
+<p>As a waitlist member you get:</p>
+<ul><li>Early access from {{launch_date}} until {{public_launch_date}}, before anyone else</li><li>{{offer_percent}}% off your Roshni Edit order (your code arrives on launch day)</li></ul>
+<p>Over the next few days we will show you the hands and the stories behind the collection.</p>
+<p>With love,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Welcome. Sent by Lane 4 right after Lane 3 captures the lead.
+WAITLIST_NURTURE#2,WAITLIST_NURTURE,2,email,1,previous_step,Meet the hands behind {{collection_name}},"<p>Hi {{first_name}},</p>
+<p>{{brand_name}} started in 2021 at {{founder_name}}'s home in Jaipur with two karigars. Today a team of 6 women artisans makes every piece in our studio, and each design takes 2 to 4 days to make.</p>
+<p>{{collection_name}} is inspired by diyas, rangoli and the jharokha windows of Jaipur's old city.</p>
+<p>Early access opens on {{launch_date}}. You will hear from us first.</p>
+<p>With love,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Brand story.
+WAITLIST_NURTURE#3,WAITLIST_NURTURE,3,email,2,previous_step,3 Roshni pieces we can't stop wearing,"<p>Hi {{first_name}},</p>
+<p>A small sneak peek before early access:</p>
+<ul><li><strong>Roshni Kundan Jhumkas</strong>: kundan-style stones and freshwater pearl drops, ₹2,450</li><li><strong>Diya Meenakari Studs</strong>: hand-painted and lightweight, ₹1,200</li><li><strong>Jharokha Layered Necklace</strong>: two layers with jharokha-shaped pendants, ₹3,900</li></ul>
+<p>Every order arrives in a reusable cotton pouch inside a gift box, ready for Diwali gifting.</p>
+<p>With love,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Product sneak peek.
+WAITLIST_NURTURE#4,WAITLIST_NURTURE,4,email,2,previous_step,Early access opens {{launch_date}},"<p>Hi {{first_name}},</p>
+<p>A quick reminder: as a waitlist member you can shop {{collection_name}} from {{launch_date}} until {{public_launch_date}}, before it opens to everyone, with {{offer_percent}}% off.</p>
+<p>We will email your code on the morning of {{launch_date}}.</p>
+<p>With love,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Last nurture step. Lane 4 sets status nurture_done after this.
+LAUNCH_BROADCAST#1,LAUNCH_BROADCAST,1,telegram_channel,-2,launch,,"🪔 <b>2 days to go!</b>
+{{collection_name}}: 6 handmade designs inspired by diyas, rangoli and Jaipur's jharokhas, opening early for our waitlist on {{launch_date}}.
+
+Not on the list yet? Join for early access + {{offer_percent}}% off: {{waitlist_form_url}}",FALSE,TRUE,,Channel teaser 2 days before launch.
+LAUNCH_BROADCAST#2,LAUNCH_BROADCAST,2,email,0,launch,Early access is open: your {{offer_percent}}% code is inside,"<p>Hi {{first_name}},</p>
+<p><strong>{{collection_name}}</strong> is now open for you, before anyone else. Early access runs until {{public_launch_date}}.</p>
+<p>Your code: <strong>{{offer_code}}</strong> for {{offer_percent}}% off, once, on Roshni Edit pieces during early access.</p>
+<p>To order, send us a DM on Instagram at {{brand_instagram}} or shop on our online store.</p>
+<p>With love,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Launch email to every active waitlist lead.
+LAUNCH_BROADCAST#3,LAUNCH_BROADCAST,3,telegram_channel,0,launch,,"✨ <b>Early access to {{collection_name}} is live</b> for our waitlist!
+Everyone else can shop from {{public_launch_date}}.
+
+Join the waitlist for the next drop: {{waitlist_form_url}}",FALSE,TRUE,,Channel post at launch.
+LAUNCH_BROADCAST#4,LAUNCH_BROADCAST,4,email,1,launch,Early access ends {{public_launch_date}},"<p>Hi {{first_name}},</p>
+<p>A gentle reminder: your early access to {{collection_name}} and your code <strong>{{offer_code}}</strong> ({{offer_percent}}% off) end when the collection opens to everyone on {{public_launch_date}}.</p>
+<p>DM us on Instagram at {{brand_instagram}} if you need help choosing.</p>
+<p>With love,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Reminder 1 day after launch.
+LAUNCH_BROADCAST#5,LAUNCH_BROADCAST,5,telegram_channel,2,launch,,"🎉 <b>{{collection_name}} is now open to everyone!</b>
+6 handmade designs from ₹1,200 to ₹6,500. Order by DM at {{brand_instagram}}.
+
+Shubh Deepavali from all of us at {{brand_name}} 🪔",FALSE,TRUE,,Public launch post (launch + EARLY_ACCESS_DAYS).
+OUTREACH_BOUTIQUE#1,OUTREACH_BOUTIQUE,1,email,0,previous_step,{{business_name}} x Kaya Jewels for Diwali?,"<p>Hi {{contact_name}},</p>
+<p>{{ai_opener}}</p>
+<p>I am writing from {{brand_name}}, a handmade jewellery studio in Jaipur. Our Diwali collection, {{collection_name}}, has 6 designs from ₹1,200 to ₹6,500, all made by our team of 6 women artisans.</p>
+<p>We think it would sit beautifully alongside what {{business_name}} already offers. Stockists buy at 35% off MRP with a minimum order of 20 pieces, and the first order comes with a printed lookbook and a counter display card.</p>
+<p>Shall I send you the lookbook and the wholesale price list?</p>
+<p>Warmly,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",TRUE,TRUE,,First touch. {{ai_opener}} = one personal sentence written by AI from the prospect's notes.
+OUTREACH_BOUTIQUE#2,OUTREACH_BOUTIQUE,2,email,3,previous_step,Re: {{business_name}} x Kaya Jewels for Diwali?,"<p>Hi {{contact_name}},</p>
+<p>Just bringing this back to the top of your inbox. Stock ships within 7 working days of order confirmation, so there is still time to have {{collection_name}} in store for the festive rush.</p>
+<p>I can send the lookbook, or our founder {{founder_name}} can call you. Which would you prefer?</p>
+<p>Warmly,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Follow-up 1.
+OUTREACH_BOUTIQUE#3,OUTREACH_BOUTIQUE,3,email,4,previous_step,Last note from Kaya Jewels,"<p>Hi {{contact_name}},</p>
+<p>I do not want to crowd your inbox, so this is my last note. If {{collection_name}} is not right for {{business_name}} this season, no problem at all. Just reply ""later"" and we will check in again next season.</p>
+<p>Warmly,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Break-up email. Lane 6 sets status sequence_done after this.
+OUTREACH_INFLUENCER#1,OUTREACH_INFLUENCER,1,email,0,previous_step,A Diwali collab with Kaya Jewels? 🪔,"<p>Hi {{contact_name}},</p>
+<p>{{ai_opener}}</p>
+<p>I am reaching out from {{brand_name}}, a handmade jewellery studio in Jaipur. We are launching our Diwali collection, {{collection_name}}, and we would love to collaborate with you.</p>
+<p>The idea: we gift you one piece of your choice from the collection (up to ₹3,000), and you get a personal code that gives your followers 10% off and earns you 10% commission on every sale. In return we would love 1 reel and 2 stories. There is no paid fee.</p>
+<p>Shall I send you the lookbook so you can pick your piece?</p>
+<p>Warmly,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",TRUE,TRUE,,First touch. {{ai_opener}} = one personal sentence written by AI from the prospect's notes.
+OUTREACH_INFLUENCER#2,OUTREACH_INFLUENCER,2,email,3,previous_step,Re: A Diwali collab with Kaya Jewels? 🪔,"<p>Hi {{contact_name}},</p>
+<p>Bumping this in case it got buried. {{collection_name}} opens for our waitlist on {{launch_date}}, and we would love your followers to see it from you.</p>
+<p>Happy to send the lookbook whenever you like.</p>
+<p>Warmly,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Follow-up 1.
+OUTREACH_INFLUENCER#3,OUTREACH_INFLUENCER,3,email,4,previous_step,Last note from Kaya Jewels,"<p>Hi {{contact_name}},</p>
+<p>This is my last note, promise. If a collab is not right for you this Diwali, no worries at all. Just reply ""later"" and we will reach out again next season.</p>
+<p>Warmly,<br>{{sender_name}}</p>
+<p style=""font-size:12px;color:#888888"">{{unsubscribe_line}}</p>",FALSE,TRUE,,Break-up email. Lane 6 sets status sequence_done after this.

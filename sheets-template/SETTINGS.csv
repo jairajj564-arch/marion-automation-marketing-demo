@@ -1,0 +1,33 @@
+key,value,type,description
+DEMO_MODE,TRUE,boolean,TRUE = compress time for live demos (1 simulated day = DEMO_MINUTES_PER_DAY real minutes). FALSE = real calendar time.
+DEMO_MINUTES_PER_DAY,2,number,Real minutes that represent one day when DEMO_MODE is TRUE. 2 means a 2-day delay becomes 4 minutes.
+DEMO_LAUNCH_AT,,timestamp,"Demo mode only: the real moment early access 'opens' (Lane 5). Set it to about 15 minutes from now before a demo, e.g. 2026-10-08T18:30:00+05:30. Blank = no launch in demo mode."
+LAUNCH_DATE,2026-10-26,date,PLACEHOLDER real launch date: early access opens for the waitlist on this date (YYYY-MM-DD).
+LAUNCH_TIME,10:00,time,"Time of day (HH:mm, Asia/Kolkata) the launch happens on LAUNCH_DATE."
+EARLY_ACCESS_DAYS,2,integer,Days of waitlist-only early access. Public launch = launch + this many days.
+TIMEZONE,Asia/Kolkata,text,Informational. All lanes use Asia/Kolkata. Do not change.
+SHEET_URL,https://docs.google.com/spreadsheets/d/__KAYA_SHEET_ID__/edit,url,"Link to this Google Sheet, used in Telegram messages. Replace __KAYA_SHEET_ID__."
+WAITLIST_FORM_URL,http://localhost:5678/form/kaya-waitlist,url,"Public URL of the Lane 3 waitlist form (n8n Form Trigger, path kaya-waitlist). Used in every CTA."
+SENDER_NAME,Kaya Jewels (Demo),text,Display name on every email sent by the Gmail Sender credential.
+SENDER_EMAIL,kayademo.hello@gmail.com,email,PLACEHOLDER address of the Gmail Sender account. Lane 7 uses it to ignore our own messages.
+ALLOWED_DEMO_INBOXES,kayademo.customers@gmail.com,csv,Comma-separated demo inboxes. Mail may go to these addresses and their plus-addresses (name+anything@domain) only.
+ALLOWED_EMAIL_DOMAINS,,csv,Optional comma-separated domains you own for demos (every address on them is allowed). Never put public domains like gmail.com here. Blank = none.
+MAX_SENDS_PER_RUN,3,integer,"Max emails one run of a sending lane (2, 4, 5, 6) may send. Keep MAX_SENDS_PER_RUN x (SEND_DELAY_SECONDS + 3) under 40."
+SEND_DELAY_SECONDS,6,integer,Pause between two emails in the same run.
+MIN_EMAIL_GAP_DAYS,0.5,number,Minimum gap between two automated emails to the same lead or prospect (scaled by demo mode).
+MAX_POSTS_PER_RUN,2,integer,Max Telegram channel posts one run of Lane 2 may publish.
+TELEGRAM_OWNER_CHAT_ID,000000000,chat_id,"PLACEHOLDER your personal Telegram chat id (approvals, hot alerts, reports)."
+TELEGRAM_CHANNEL_ID,@kayajewels_demo,chat_id,PLACEHOLDER Telegram channel that stands in for Instagram (the bot must be an admin).
+BRAND_VOICE,"Warm, festive and personal, like a friend who makes jewellery by hand. Confident but never pushy. Celebrates craft, family and the light of Diwali. Simple words, short sentences.",text,Brand voice injected into every AI prompt.
+GEMINI_MODEL,gemini-2.5-flash,text,Main AI model (Google AI Studio free tier). Change if Google renames or limits it.
+GEMINI_THINKING_BUDGET,1024,integer,"Max 'thinking' tokens for Gemini 2.5 models, so thinking cannot use up the answer's token budget. Leave blank for models without thinking (e.g. gemini-2.0-flash)."
+GROQ_MODEL,llama-3.3-70b-versatile,text,Fallback AI model on Groq (free tier).
+AI_TEMPERATURE,0.7,number,"Creativity of AI answers (0 = strict, 1 = creative)."
+AI_WAIT_SECONDS,6,integer,Pause between two AI calls in a loop (free-tier rate limits).
+POST_TIMES,"11:00,19:00",csv,"Posting slots per day (HH:mm, Asia/Kolkata) used by Lane 1 to spread scheduled_for."
+CONTENT_START_IN_DAYS,1,integer,Lane 1 schedules the first new post this many days after the run (scaled in demo mode).
+HOT_LEAD_SCORE,70,integer,Lead score at or above which a lead is 'hot'.
+WARM_LEAD_SCORE,40,integer,Lead score at or above which a lead is 'warm' (below = 'cold').
+REPORT_TIME,21:00,time,Real mode: time of the daily Lane 8 report (Asia/Kolkata).
+DEMO_REPORT_EVERY_MINUTES,10,integer,Demo mode: Lane 8 sends a report every this many real minutes.
+UNSUBSCRIBE_LINE,"Not for you? Just reply ""unsubscribe"" and we will not email you again.",text,Footer line for {{unsubscribe_line}} in every email.
