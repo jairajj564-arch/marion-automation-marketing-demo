@@ -71,7 +71,7 @@
       "name": "Lane 1 · Read SETTINGS",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -121,7 +121,7 @@
       "name": "Lane 1 · Read BRIEF",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -215,7 +215,7 @@
       "name": "Lane 1 · Ask Gemini",
       "credentials": {
         "googlePalmApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Gemini"
         }
       },
@@ -315,7 +315,7 @@
       "name": "Lane 1 · Ask Groq (fallback)",
       "credentials": {
         "groqApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Groq"
         }
       },
@@ -665,7 +665,7 @@
       "name": "Lane 1 · Save to CONTENT",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },
@@ -711,7 +711,7 @@
       "webhookId": "8cd1479c-ea97-5a74-9d8f-97464e0c03d3",
       "credentials": {
         "telegramApi": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Telegram Bot"
         }
       },
@@ -891,7 +891,7 @@
       "name": "Lane 1 · Save to EVENTS_LOG",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
+          "id": null,
           "name": "Kaya Demo · Google Sheets"
         }
       },

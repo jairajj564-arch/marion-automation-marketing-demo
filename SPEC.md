@@ -1,6 +1,6 @@
 # SPEC: Kaya Jewels Diwali campaign demo (Marion Enroute)
 
-**Version 1.0 · written in session 1 · this file is the contract for sessions 2–5.**
+**Version 1.1 · written in session 1, cross-lane rules added in session 5 (marked "session 5") · this file is the contract for every lane.**
 
 The whole project is **one n8n canvas with 8 lanes**. Each lane has its own trigger, is not connected to any other lane, and sits inside its own sticky-note frame. Lanes only "talk" through one Google Sheet. Sessions 2–4 build lanes in parallel without seeing each other, so **everything a lane needs to agree on with another lane is written here**. If this spec and your idea disagree, follow the spec. If the spec is silent, choose the simplest option and write it down in `PROGRESS.md` under "Open decisions".
 
@@ -25,10 +25,10 @@ Contents
 No real keys or tokens ever go into this repo. Nodes reference credentials **by name only**, with an empty id:
 
 ```json
-"credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Kaya Demo · Google Sheets" } }
+"credentials": { "googleSheetsOAuth2Api": { "id": null, "name": "Kaya Demo · Google Sheets" } }
 ```
 
-When the workflow is imported or saved, n8n links each reference to the credential with the **same name and type** (verified on n8n 1.123.84: `replaceInvalidCredentials` matches by name when the id is unknown). So the owner creates these six credentials **first**, copy-pasting the names exactly (the `·` is a middle dot, U+00B7):
+When the workflow is imported or saved, n8n links each reference to the credential with the **same name and type** (verified on n8n 1.123.84: the CLI import's `replaceInvalidCredentials` and the editor's `matchCredentials` both match by name when the id is empty). **The id MUST be `null`, not `""` (session 5):** the editor's *Import from File* first deletes every reference whose id is not a known credential and only spares `id: null`, so `""` loses all credentials on a UI import (CLI import works with both). So the owner creates these six credentials **first**, copy-pasting the names exactly (the `·` is a middle dot, U+00B7):
 
 | # | Credential name (exact) | n8n credential type (JSON key) | Shown in n8n as | Used by |
 |---|---|---|---|---|
@@ -458,6 +458,11 @@ const publicLaunchAt = (S) => launchAt(S) && addDays(launchAt(S), Number(S.EARLY
 const gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;
 ```
 
+* **One email per gap across lanes (session 5).** `gapOk` only sees emails already written to the row, and the minute lanes overlap (Lane 2 starts at :00, Lane 4 at :15, Lane 5 at :30, each may run ~45 s). So Lanes 2 (newsletter) and 5 (launch emails) leave a lead to Lane 4 while its nurture email is due within the next minute:
+  ```js
+  const reservedForNurture = (lead) => ['new', 'nurturing'].includes(lead.status) && (!parseTs(lead.next_action_at) || parseTs(lead.next_action_at).toMillis() <= now.toMillis() + 60000);
+  ```
+  and Lane 4 re-reads the row right before sending (5.4), so an email Lane 2/5 just sent is seen by the gap rule.
 * **Dates shown to people** (emails, posts, AI prompts) always use the real `LAUNCH_DATE`, formatted `cccc, d LLLL` (e.g. `Monday, 26 October`), even in demo mode. Only *timing* is compressed.
 * No lane changes behaviour because of the demo clock except through these helpers.
 
@@ -471,6 +476,7 @@ const gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - 
 * Always match on the key column (`content_id`, `lead_id`, `prospect_id`, `step_key`, `metric_key`), never on `row_number` (humans sort and filter the sheet).
 * `cellFormat: "RAW"` everywhere so Sheets never turns our text into dates or formulas.
 * Sheets nodes: `retryOnFail: true`, `maxTries: 3`, `waitBetweenTries: 3000`.
+* **Re-read before send (session 5)**: Lanes 4 and 6, which write `status` that Lane 7 also writes, read their tab again right before the safety gate (`Lane N · Re-read LEADS/PROSPECTS` → `Lane N · Check … is still due` → `Lane N · Still due?`). If the row changed since the pick (status, `seq_step`, gap), the item goes back to the loop: nothing is sent, written or logged. A reply Lane 7 records mid-run therefore stops the email and Lane 7's status is never overwritten.
 * **Never send twice**: in every per-item loop the order is *act → update that row → log*, with nothing slow in between. The update for one person happens before the next person is processed. A crash can therefore lose at most one log line, never cause a second email for the same step.
 
 ### 5.5 Triggers, schedules and waits (built to survive power cuts)
@@ -593,7 +599,8 @@ Node settings: `retryOnFail: false` (a retry could send twice), `onError: "conti
 
 * Lane N owns the horizontal band **y = (N−1) × 1200 … (N−1) × 1200 + 1000**. All of its nodes (sticky notes included) stay inside that band; x runs from −240 to at most 6000.
 * Frame sticky `Lane N · <Lane title>`: position `[-240, (N−1)×1200]`, `height: 1000`, width as needed, `color: ((N−1) mod 7) + 1`. Its first line is `## Lane N · <Lane title>  ·  trigger: …`, then 3–4 lines: what it does, which tabs it reads/writes, credentials, and the SPEC section. Leave the top ~240 px of the band free for this text: put nodes at y ≥ (N−1)×1200 + 260.
-* Extra explanatory sticky notes are welcome (named `Lane N · …`, color 7).
+* Extra explanatory sticky notes are welcome (named `Lane N · …`, color 7). They sit in empty space or fully behind a group of nodes, never half over a node; nodes never overlap (`tools/validate-workflow.mjs` checks this, with a node drawn as a 100 × 100 box).
+* The merged canvas has one overview sticky above Lane 1, named `Canvas · …` (the only node name without a lane prefix, allowed only above y = 0). In the merged canvas, Lane 7's frame uses color 2 instead of 7, because color 7 renders almost white in n8n 1.123 (session 5).
 * Node `notes` + `notesInFlow: true` with 2–5 words are encouraged (shown under the node on the canvas).
 * Node ids are UUIDs, unique across the canvas. Do not reuse ids from another lane file.
 
@@ -819,7 +826,7 @@ Each lane: trigger · inputs · outputs · columns read/written · events · out
 * **Update the row** with the status mapping in 3.2 / 3.3, `last_reply_at`, `reply_class`, `next_action_at = ''` (unless `out_of_office`), `updated_at`, and append `[yyyy-MM-dd] <summary>` to `notes` (leads) or `deal_notes` (prospects). Log `reply_received` with status_from/status_to.
 * **Alerts** to `TELEGRAM_OWNER_CHAT_ID`: `interested` → `🔥 HOT: <name/business> replied: "<summary>"` + suggested next step; `question` → `❓ <name> asked: "<summary>"`. Log `hot_alert_sent`.
 * Finally mark the message read (Gmail v2.1 `markAsRead`, credential Gmail Sender).
-* **Optional demo helper** (allowed second trigger in this lane): Form Trigger `Lane 7 · Demo reply form` (`options.path = "kaya-demo-reply"`), fields `Reply to email sent to` (text: the plus-address) and `Reply type` (dropdown: Interested · Question · Not now · Unsubscribe). It finds the latest message from `SENDER_EMAIL` to that address in the **Demo Customers** mailbox (Gmail getAll, `q: "from:<SENDER_EMAIL> to:<address>"`, limit 1) and replies in the thread with a canned text (Gmail `reply`, credential `Kaya Demo · Gmail Demo Customers`, `options.appendAttribution: false`). The gate checks that the reply goes to `SENDER_EMAIL` (always allowed). Log `demo_reply_simulated`.
+* **Optional demo helper** (allowed second trigger in this lane): Form Trigger `Lane 7 · Demo reply form` (`options.path = "kaya-demo-reply"`), fields `Reply to email sent to` (text: the plus-address) and `Reply type` (dropdown: Interested · Question · Not now · Unsubscribe). It finds the latest message from `SENDER_EMAIL` to that address in the **Demo Customers** mailbox (Gmail getAll, `q: "from:<SENDER_EMAIL> to:<address>"`, limit 1) and replies in the thread with a canned text (Gmail `reply`, credential `Kaya Demo · Gmail Demo Customers`, `options: { appendAttribution: false, replyToSenderOnly: true }`). Session 5: the Gmail API always sends the reply FROM the bare demo inbox (`kayademo.customers@gmail.com`), which matches no single row, so the reply must be matched by its thread. The form therefore only accepts the address of a known lead/prospect, and only replies to a found mail that was sent to exactly that address and has a thread id. The gate checks that the reply goes to `SENDER_EMAIL` (always allowed). Log `demo_reply_simulated`.
 * **Columns written:** LEADS `status, last_reply_at, reply_class, next_action_at, notes, updated_at`; PROSPECTS `status, last_reply_at, reply_class, next_action_at, deal_notes, updated_at`.
 
 ### 7.8 Lane 8 · Report
@@ -834,19 +841,19 @@ Each lane: trigger · inputs · outputs · columns read/written · events · out
 
 ## 8. Merge checklist (session 5)
 
-Goal: one file `workflow/kaya-demo-all-lanes.json` named **`Kaya Jewels · Diwali campaign demo (Marion Enroute)`** containing lanes 1–8.
+Goal: one file containing lanes 1–8. **Session 5 result:** `lanes/marion-marketing-engine.json`, workflow name **`Marion Enroute · Marketing Engine demo (Kaya Jewels)`**, built by `node tools/build-canvas.mjs` from the 8 lane files (re-run it after changing a lane). Checks: `tests/IMPORT-CHECK.md`, `tests/e2e/RESULTS.md`.
 
 1. **Collect** `lanes/lane-1-content-engine.json` … `lanes/lane-8-report.json`. Run `node tools/validate-workflow.mjs <file>` on each; fix every ✖ before merging.
 2. **Merge**: concatenate all `nodes` arrays; merge all `connections` objects (keys are node names, which are unique because of the lane prefix). Take `settings` from Lane 1 (`executionOrder: v1`, `timezone: Asia/Kolkata`, `saveManualExecutions: true`). Drop each file's `id`, `versionId`, `meta.instanceId`, `pinData`. Set `active: false`.
 3. **Uniqueness**: no duplicate node names, no duplicate node ids (regenerate a UUID if two collide), no duplicate `webhookId`s (Form, Wait and Telegram nodes carry one).
 4. **One Manual Trigger** only (Lane 1). Every other lane starts with its own Schedule/Form/Gmail trigger. No connection crosses lanes.
 5. **Layout**: each lane inside its band (5.8), frame sticky present and named `Lane N · <title>`; nothing overlaps.
-6. **Credentials**: every reference uses a name from section 1 with `"id": ""`. No API key, token, client secret or real email password anywhere (`validate-workflow.mjs` scans for common key patterns).
+6. **Credentials**: every reference uses a name from section 1 with `"id": null`. No API key, token, client secret or real email password anywhere (`validate-workflow.mjs` scans for common key patterns).
 7. **Safety**: every Gmail send/reply sits behind `Lane N · Recipient allowed?` (true branch) and uses `={{ $json.safe_to }}`; `appendAttribution: false` on Gmail, Telegram and Form nodes.
 8. **Sheets**: all Google Sheets nodes use `__KAYA_SHEET_ID__` by id and a tab by name; writes use `cellFormat: RAW`; updates match on the key column.
 9. **Waits**: no Wait over 60 s; delays use `next_action_at` / `scheduled_for` / launch offsets.
 10. **Events**: grep all lanes for `event_type` values; every one is in the closed list of 5.6 (Lane 8 relies on it).
-11. **Run the validator on the merged file**: `node tools/validate-workflow.mjs workflow/kaya-demo-all-lanes.json` → `✔ valid`.
-12. **Import test** (if n8n is available): create the 6 credentials with dummy values, `n8n import:workflow --input=workflow/kaya-demo-all-lanes.json`, export it again and confirm every credential reference got an id (name matching worked).
+11. **Run the validator on the merged file**: `node tools/validate-workflow.mjs lanes/marion-marketing-engine.json` → `✔ valid`.
+12. **Import test** (if n8n is available): create the 6 credentials with dummy values, `n8n import:workflow --input=lanes/marion-marketing-engine.json`, export it again and confirm every credential reference got an id (name matching worked).
 13. **Demo dry run** (owner, on the PC): fresh sheet from the CSVs → replace `__KAYA_SHEET_ID__` → import → set placeholders in SETTINGS (`SENDER_EMAIL`, Telegram ids, `DEMO_LAUNCH_AT`) → run Lane 1 → approve 3 rows → activate the workflow → submit the form with a plus-address → watch Lanes 2–8 for 20 minutes. Record results in `PROGRESS.md`.
 14. **Docs**: update `PROGRESS.md` (what is done, known issues) and `NODES.md` (add a section per lane, same style as Lane 1).

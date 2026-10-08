@@ -1,0 +1,3516 @@
+{
+  "name": "Kaya Jewels demo · Lane 2 · Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📣 Lane 2 · Publisher  ·  trigger: every minute (cron `0 * * * * *`)\n**What it does:** looks in **CONTENT** for rows with status `approved` / `publishing` whose `scheduled_for` has passed. Captions, short posts and blog teasers go to the **Telegram channel** (stand-in for Instagram), reel ideas go to **your private chat** as shoot briefs, and an approved **newsletter** is emailed to active leads (a few per minute) until everyone has it.\n**Reads:** SETTINGS, CONTENT, LEADS (only when a newsletter is due). **Writes:** CONTENT `status, published_at, publish_ref, last_error, updated_at` · LEADS `last_newsletter_id, last_contacted_at, thread_ids, updated_at` (+ `status, email_allowed` when an address is blocked) · EVENTS_LOG.\n**Credentials:** Kaya Demo · Google Sheets / Gmail Sender / Telegram Bot.  **Docs:** SPEC.md §7.2 · docs/lane-2.md explains every node.",
+        "height": 1000,
+        "width": 5900,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        1200
+      ],
+      "id": "3f703353-95f0-572e-82a4-7d424ab87e68",
+      "name": "Lane 2 · Publisher"
+    },
+    {
+      "parameters": {
+        "content": "### How the newsletter loop works\n1. A newsletter is just a CONTENT row with `asset_type = newsletter`.\n2. Each minute Lane 2 picks up to **MAX_SENDS_PER_RUN** active leads who do not have it yet (`last_newsletter_id` ≠ this newsletter) and who passed the gap rule.\n3. For each lead: **safety gate → Gmail → update the lead row → log → pause**. The lead row is updated *before* the next lead, so nobody is emailed twice.\n4. When nobody is left waiting, the CONTENT row becomes `published`. If the PC was off, the next run just carries on.",
+        "height": 400,
+        "width": 1400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        1760
+      ],
+      "id": "89e714d5-299a-56a1-80b2-2bd6fed3a466",
+      "name": "Lane 2 · How the newsletter loop works"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1500
+      ],
+      "id": "ac59f607-48f8-53f1-8f52-8467d69ca6e7",
+      "name": "Lane 2 · Every minute",
+      "notes": "Cron: every minute",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SETTINGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        1500
+      ],
+      "id": "3ddb8246-f466-5b0a-8a96-4c6c5c743653",
+      "name": "Lane 2 · Read SETTINGS",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Reads every setting",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// SETTINGS arrives as one item per row (key | value | type | description).\n// Turn it into ONE item, e.g. { DEMO_MODE: 'TRUE', MAX_POSTS_PER_RUN: '2', ... }.\nconst settings = {};\nfor (const item of $input.all()) {\n  const key = String(item.json.key ?? '').trim();\n  if (!key) continue;\n  const value = item.json.value;\n  settings[key] = typeof value === 'string' ? value.trim() : (value ?? '');\n}\n\n// Stop early with a clear message if the sheet is missing something Lane 2 needs.\nconst required = [\n  'DEMO_MODE', 'DEMO_MINUTES_PER_DAY', 'LAUNCH_DATE', 'EARLY_ACCESS_DAYS', 'WAITLIST_FORM_URL',\n  'SENDER_NAME', 'SENDER_EMAIL', 'ALLOWED_DEMO_INBOXES', 'MAX_SENDS_PER_RUN', 'SEND_DELAY_SECONDS',\n  'MIN_EMAIL_GAP_DAYS', 'MAX_POSTS_PER_RUN', 'TELEGRAM_OWNER_CHAT_ID', 'TELEGRAM_CHANNEL_ID', 'UNSUBSCRIBE_LINE',\n];\nconst missing = required.filter((key) => settings[key] === undefined || String(settings[key]).trim() === '');\nif (missing.length) {\n  throw new Error(`The SETTINGS tab is missing a value for: ${missing.join(', ')}`);\n}\nif (settings.ALLOWED_EMAIL_DOMAINS === undefined) settings.ALLOWED_EMAIL_DOMAINS = '';   // optional, may be blank\n\n// Numbers must really be numbers (a typo here would otherwise break the run halfway).\nconst mustBe = (key, test, what) => { if (!test(Number(settings[key]))) throw new Error(`SETTINGS ${key} must be ${what}, found \"${settings[key]}\"`); };\nmustBe('MAX_POSTS_PER_RUN', (n) => Number.isInteger(n) && n >= 1, 'a whole number of 1 or more');\nmustBe('MAX_SENDS_PER_RUN', (n) => Number.isInteger(n) && n >= 1, 'a whole number of 1 or more');\nmustBe('SEND_DELAY_SECONDS', (n) => Number.isFinite(n) && n >= 0, 'a number of seconds, 0 or more');\nmustBe('MIN_EMAIL_GAP_DAYS', (n) => Number.isFinite(n) && n >= 0, 'a number of days, 0 or more');\nmustBe('EARLY_ACCESS_DAYS', (n) => Number.isFinite(n) && n >= 0, 'a number of days, 0 or more');\nsettings.SEND_DELAY_SECONDS = Math.min(60, Number(settings.SEND_DELAY_SECONDS));   // SPEC 5.5: no Wait over 60 seconds\n\n// Derived values (SPEC section 5.3). Sheet booleans may come back as true or \"TRUE\".\nsettings.IS_DEMO = String(settings.DEMO_MODE).trim().toUpperCase() === 'TRUE';\nconst demoMinutes = Number(settings.DEMO_MINUTES_PER_DAY);\nif (settings.IS_DEMO && !(demoMinutes > 0)) {\n  throw new Error('DEMO_MINUTES_PER_DAY must be a number above 0 when DEMO_MODE is TRUE');\n}\nsettings.DAY_MS = settings.IS_DEMO ? demoMinutes * 60 * 1000 : 24 * 60 * 60 * 1000;\n\nreturn [{ json: settings }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        1500
+      ],
+      "id": "d4e6532b-404a-5133-8386-c5af363dfcf6",
+      "name": "Lane 2 · Settings to object",
+      "notes": "Rows → one settings item",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        1500
+      ],
+      "id": "31b6bf2c-63ad-579c-8f0e-bf49934d7892",
+      "name": "Lane 2 · Read CONTENT",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Reads all content rows",
+      "notesInFlow": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Pick due content\n// Looks at every CONTENT row once and decides what this run does:\n//   kind \"post\"       -> a Telegram item that is approved and due (at most MAX_POSTS_PER_RUN, oldest first)\n//   kind \"newsletter\" -> at most ONE newsletter that is approved/publishing and due\n//   kind \"problem\"    -> a due row that cannot be published (empty field, bad date...). Reported once.\n// Rows that are not approved, or not due yet, are never touched.\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst S = $('Lane 2 · Settings to object').first().json;\n\nconst escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nfunction render(template, values) {\n  const missing = new Set();\n  const text = String(template ?? '').replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (token, key) => {\n    if (values[key] === undefined || values[key] === null) { missing.add(key); return token; }\n    return String(values[key]);\n  });\n  return { text, missing: [...missing] };\n}\n// The placeholders a Lane 2 newsletter may use (it only reads SETTINGS and LEADS).\nconst NEWSLETTER_KEYS = ['first_name', 'city', 'unsubscribe_line', 'launch_date', 'public_launch_date', 'waitlist_form_url', 'sender_name'];\n\nconst POST_TYPES = ['ig_caption', 'short_post', 'blog_article', 'reel_idea'];\nconst REQUIRED = {\n  ig_caption: ['body'], short_post: ['body'],\n  blog_article: ['title', 'body', 'slug'], reel_idea: ['title', 'body'],\n  newsletter: ['title', 'body'],\n};\nconst clean = (value) => String(value ?? '').trim();\n\nfunction problemOf(row) {\n  const type = clean(row.asset_type);\n  if (!REQUIRED[type]) return `asset_type \"${type}\" is not supported`;\n  const empty = REQUIRED[type].filter((field) => clean(row[field]) === '');\n  if (empty.length) return `${empty.join(', ')} ${empty.length > 1 ? 'are' : 'is'} empty`;\n  if (type === 'newsletter') {\n    const sample = Object.fromEntries(NEWSLETTER_KEYS.map((key) => [key, 'x']));\n    const unknown = [...new Set([...render(row.title, sample).missing, ...render(row.body, sample).missing])];\n    if (unknown.length) return `unknown placeholder ${unknown.map((k) => `{{${k}}}`).join(', ')} in title/body`;\n  }\n  return '';\n}\n\nconst rows = $input.all().map((item) => item.json).filter((row) => clean(row?.content_id) !== '');\nconst posts = [];\nconst newsletters = [];\nconst problems = [];\n\nfor (const row of rows) {\n  const status = clean(row.status).toLowerCase();\n  if (status !== 'approved' && status !== 'publishing') continue;      // not ours to touch\n  const when = parseTs(row.scheduled_for);\n  let problem = '';\n  if (clean(row.scheduled_for) === '') problem = 'scheduled_for is missing';\n  else if (!when) problem = `scheduled_for \"${clean(row.scheduled_for)}\" is not a valid timestamp`;\n  else if (when.toMillis() > now.toMillis()) continue;                   // not due yet: leave it alone\n  else problem = problemOf(row);\n\n  if (problem) {\n    const message = `Lane 2 skipped: ${problem}`.slice(0, 300);\n    if (clean(row.last_error) !== message) {                             // report each problem once, not every minute\n      problems.push({ kind: 'problem', content_id: clean(row.content_id), asset_type: clean(row.asset_type), status, last_error: message, updated_at: nowTs() });\n    }\n    continue;\n  }\n  const base = {\n    content_id: clean(row.content_id), asset_type: clean(row.asset_type), status,\n    scheduled_for: clean(row.scheduled_for), when: when.toMillis(),\n    title: String(row.title ?? ''), body: String(row.body ?? ''), hashtags: clean(row.hashtags),\n    media_notes: String(row.media_notes ?? ''), meta_description: String(row.meta_description ?? ''), slug: clean(row.slug),\n  };\n  if (base.asset_type === 'newsletter') newsletters.push(base);\n  else if (POST_TYPES.includes(base.asset_type)) posts.push(base);\n}\n\nconst oldestFirst = (a, b) => a.when - b.when || a.content_id.localeCompare(b.content_id);\nposts.sort(oldestFirst);\n// A newsletter that is already being broadcast is finished before a new one starts.\nnewsletters.sort((a, b) => (a.status === 'publishing' ? 0 : 1) - (b.status === 'publishing' ? 0 : 1) || oldestFirst(a, b));\n\nconst out = [];\nfor (const post of posts.slice(0, Number(S.MAX_POSTS_PER_RUN))) out.push({ json: { kind: 'post', ...post } });\nif (newsletters.length) out.push({ json: { kind: 'newsletter', ...newsletters[0], needs_publishing: newsletters[0].status === 'approved' } });\nfor (const problem of problems) out.push({ json: problem });\nreturn out;          // nothing to do = no items = the run ends quietly\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1500
+      ],
+      "id": "8cb8a92a-ef83-59c1-84df-3315e9c3f29a",
+      "name": "Lane 2 · Pick due content",
+      "notes": "Approved + due only",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "90b4061c-e617-50ff-8653-7e5e8fac5060",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "post",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renamedOutput": true,
+              "outputKey": "post"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "fafc1979-8930-5546-8ce0-1b3e9d6ae5d9",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "newsletter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renamedOutput": true,
+              "outputKey": "newsletter"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "487c9566-6046-5cea-83b5-0acbacd5e4b6",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "problem",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renamedOutput": true,
+              "outputKey": "problem"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1100,
+        1500
+      ],
+      "id": "5ee63eee-b8a4-5009-83e0-3e7be5055fde",
+      "name": "Lane 2 · Route by kind",
+      "notes": "post / newsletter / problem",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build problem update\n// The Sheets \"update\" node writes EVERY field it receives, so send it only the key + the columns Lane 2 owns.\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nreturn $input.all().map((item) => ({\n  json: { content_id: item.json.content_id, last_error: item.json.last_error, updated_at: item.json.updated_at },\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        1480
+      ],
+      "id": "98dc20f2-a714-567a-80a4-177925f13109",
+      "name": "Lane 2 · Build problem update",
+      "notes": "Key + owned columns",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "content_id"
+          ],
+          "schema": [
+            {
+              "id": "content_id",
+              "displayName": "content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "batch_id",
+              "displayName": "batch_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "asset_type",
+              "displayName": "asset_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hashtags",
+              "displayName": "hashtags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cta",
+              "displayName": "cta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "media_notes",
+              "displayName": "media_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_title",
+              "displayName": "seo_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_description",
+              "displayName": "meta_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_keyword",
+              "displayName": "target_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_score",
+              "displayName": "seo_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scheduled_for",
+              "displayName": "scheduled_for",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_content_id",
+              "displayName": "source_content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_provider",
+              "displayName": "ai_provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_notes",
+              "displayName": "review_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publish_ref",
+              "displayName": "publish_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1560,
+        1480
+      ],
+      "id": "0151975d-0afe-58ad-8933-f5dc9f16ffac",
+      "name": "Lane 2 · Update CONTENT with problem",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Sets last_error only",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build problem log: one `error` event per row that could not be published.\nconst S = $('Lane 2 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 2,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nreturn $input.all().map((item) => ({\n  json: event({\n    event_type: 'error', entity_type: 'content', entity_id: item.json.content_id, channel: 'sheet',\n    detail: String(item.json.last_error ?? ''),\n    meta: { node: 'Lane 2 · Pick due content', message: String(item.json.last_error ?? '') },\n  }),\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        1480
+      ],
+      "id": "6848af02-feb1-55ae-8762-dbdc793e7ca4",
+      "name": "Lane 2 · Build problem log",
+      "notes": "error event",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2000,
+        1480
+      ],
+      "id": "786f73d2-2225-59ab-8340-146163da95ae",
+      "name": "Lane 2 · Save problem to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        1660
+      ],
+      "id": "2a955186-0245-5192-8e4e-4eda9078341d",
+      "name": "Lane 2 · Loop over posts",
+      "notes": "One post at a time",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build Telegram message (runs once per post, inside the loop)\nconst S = $('Lane 2 · Settings to object').first().json;\nconst row = $input.first().json;\n\nconst esc = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst LIMIT = 4000;                                   // Telegram's hard limit is 4,096\n// Shorten raw text so its HTML-escaped form fits `room` characters (never cuts an entity in half).\nfunction fit(raw, room) {\n  const text = String(raw ?? '').trim();\n  if (room <= 1) return '';\n  if (esc(text).length <= room) return text;\n  let cut = text;\n  while (cut.length > 0 && esc(cut).length > room - 1) cut = cut.slice(0, Math.max(0, cut.length - Math.max(1, Math.ceil((esc(cut).length - room) / 6))));\n  return `${cut.trimEnd()}…`;\n}\nconst waitlist = `👉 Join the waitlist: ${esc(S.WAITLIST_FORM_URL)}`;\nconst tags = esc(row.hashtags);\nconst type = row.asset_type;\nlet chat_id = S.TELEGRAM_CHANNEL_ID;\nlet channel = 'telegram_channel';\nlet compose;\n\nif (type === 'ig_caption' || type === 'short_post') {\n  compose = (f) => [esc(f.body), tags, waitlist].filter(Boolean).join('\\n\\n');\n} else if (type === 'blog_article') {\n  compose = (f) => [\n    '📝 <b>New on the Kaya Jewels blog</b>',\n    `<b>${esc(row.title.trim())}</b>`,\n    esc(f.meta_description),\n    `Read: /blog/${esc(row.slug)} (demo)`,\n    waitlist,\n  ].filter(Boolean).join('\\n\\n');\n} else if (type === 'reel_idea') {\n  chat_id = S.TELEGRAM_OWNER_CHAT_ID;\n  channel = 'telegram_owner';\n  compose = (f) => [\n    `🎬 <b>Reel brief</b>: ${esc(row.title.trim())}`,\n    esc(f.media_notes),\n    ['<b>Caption</b>', esc(f.body)].join('\\n'),\n    tags,\n  ].filter(Boolean).join('\\n\\n');\n} else {\n  throw new Error(`Unsupported asset_type ${type}`);                // Pick due content already filtered these out\n}\n\n// Start from the full text and trim the long free-text fields until the message fits.\nconst fields = { body: row.body.trim(), media_notes: row.media_notes.trim(), meta_description: row.meta_description.trim() };\nlet text = compose(fields);\nfor (const name of ['body', 'media_notes', 'meta_description']) {\n  if (text.length <= LIMIT) break;\n  const over = text.length - LIMIT;\n  fields[name] = fit(fields[name], esc(fields[name]).length - over);\n  text = compose(fields);\n}\nif (text.length > LIMIT) text = `${text.slice(0, LIMIT - 1)}…`;       // last resort (very long title/hashtags)\n\nreturn [{ json: { content_id: row.content_id, asset_type: type, status: row.status, channel, chat_id, text } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        1620
+      ],
+      "id": "4d52a911-be9f-5543-84a8-80c14998a8da",
+      "name": "Lane 2 · Build Telegram message",
+      "notes": "chat_id + text",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1780,
+        1620
+      ],
+      "id": "68775264-8dc0-5bdb-8cbb-774a9a24888e",
+      "name": "Lane 2 · Send to Telegram",
+      "webhookId": "b8af4328-c990-5cb2-80b4-37332f891833",
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Kaya Demo · Telegram Bot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "notes": "Retries 3×, errors continue",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build publish result\n// Both outputs of \"Send to Telegram\" land here: success (a message came back) or failure (an error item).\n// Output = ONLY the CONTENT columns Lane 2 owns (the update node writes every field it gets).\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst S = $('Lane 2 · Settings to object').first().json;\nconst ctx = $('Lane 2 · Build Telegram message').first().json;\nconst reply = $input.first().json ?? {};\nconst messageId = reply.message_id ?? reply.result?.message_id;\n\nif (messageId !== undefined && messageId !== null && messageId !== '') {\n  return [{ json: {\n    content_id: ctx.content_id, status: 'published', published_at: nowTs(),\n    publish_ref: `tg:${messageId}`, last_error: '', updated_at: nowTs(),\n  } }];\n}\nconst err = reply.error;\nconst detail = typeof err === 'string' ? err : (err?.description ?? err?.message ?? (err ? JSON.stringify(err) : 'Telegram returned no message_id'));\nreturn [{ json: {\n  content_id: ctx.content_id, status: 'failed', last_error: `Telegram: ${detail}`.slice(0, 300), updated_at: nowTs(),\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        1620
+      ],
+      "id": "e43d1471-99d1-5d62-863a-72c3813209d9",
+      "name": "Lane 2 · Build publish result",
+      "notes": "Success or failure",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "content_id"
+          ],
+          "schema": [
+            {
+              "id": "content_id",
+              "displayName": "content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "batch_id",
+              "displayName": "batch_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "asset_type",
+              "displayName": "asset_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hashtags",
+              "displayName": "hashtags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cta",
+              "displayName": "cta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "media_notes",
+              "displayName": "media_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_title",
+              "displayName": "seo_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_description",
+              "displayName": "meta_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_keyword",
+              "displayName": "target_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_score",
+              "displayName": "seo_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scheduled_for",
+              "displayName": "scheduled_for",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_content_id",
+              "displayName": "source_content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_provider",
+              "displayName": "ai_provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_notes",
+              "displayName": "review_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publish_ref",
+              "displayName": "publish_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        1620
+      ],
+      "id": "b0750a18-b30b-5a0a-81e2-6ac723495eef",
+      "name": "Lane 2 · Update CONTENT after post",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Right after sending",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build post log: one event for the post that was just sent (or that failed).\nconst S = $('Lane 2 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 2,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst ctx = $('Lane 2 · Build Telegram message').first().json;\nconst saved = $input.first().json;                                  // the row we just wrote (echoed by the update node)\n\nif (saved.status === 'published') {\n  return [{ json: event({\n    event_type: 'content_published', entity_type: 'content', entity_id: ctx.content_id,\n    status_from: ctx.status, status_to: 'published', channel: ctx.channel,\n    detail: `${ctx.asset_type} posted to Telegram (${saved.publish_ref})`,\n    meta: { publish_ref: saved.publish_ref, asset_type: ctx.asset_type },\n  }) }];\n}\nreturn [{ json: event({\n  event_type: 'publish_failed', entity_type: 'content', entity_id: ctx.content_id,\n  status_from: ctx.status, status_to: 'failed', channel: ctx.channel,\n  detail: String(saved.last_error ?? ''), meta: { error: String(saved.last_error ?? ''), asset_type: ctx.asset_type },\n}) }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        1620
+      ],
+      "id": "bc82ac02-6249-5aeb-83de-bc7f42431dcf",
+      "name": "Lane 2 · Build post log",
+      "notes": "content_published / publish_failed",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2660,
+        1620
+      ],
+      "id": "f19b1c42-8da4-5a47-82d8-9bf3956f1b11",
+      "name": "Lane 2 · Save post to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "709aa6ba-1ac2-50dd-8aeb-ebdecab9e018",
+              "leftValue": "={{ $json.needs_publishing }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        1900
+      ],
+      "id": "7ebf32f6-0cf3-565e-877b-0910d6a9644e",
+      "name": "Lane 2 · Newsletter needs publishing?",
+      "notes": "approved → publishing",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build publishing update: first touch of a newsletter, approved -> publishing.\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst row = $input.first().json;\nreturn [{ json: { content_id: row.content_id, status: 'publishing', updated_at: nowTs() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        1840
+      ],
+      "id": "e8c54d86-1892-5904-88c5-1868828f75eb",
+      "name": "Lane 2 · Build publishing update",
+      "notes": "status = publishing",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "content_id"
+          ],
+          "schema": [
+            {
+              "id": "content_id",
+              "displayName": "content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "batch_id",
+              "displayName": "batch_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "asset_type",
+              "displayName": "asset_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hashtags",
+              "displayName": "hashtags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cta",
+              "displayName": "cta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "media_notes",
+              "displayName": "media_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_title",
+              "displayName": "seo_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_description",
+              "displayName": "meta_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_keyword",
+              "displayName": "target_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_score",
+              "displayName": "seo_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scheduled_for",
+              "displayName": "scheduled_for",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_content_id",
+              "displayName": "source_content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_provider",
+              "displayName": "ai_provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_notes",
+              "displayName": "review_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publish_ref",
+              "displayName": "publish_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        1840
+      ],
+      "id": "2098dcab-f065-5cdf-8a28-14d57e35109d",
+      "name": "Lane 2 · Mark newsletter publishing",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "First touch only",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2000,
+        1920
+      ],
+      "id": "8069c35d-4097-577c-8c69-7b80d196c70b",
+      "name": "Lane 2 · Read LEADS",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Only when a newsletter is due",
+      "notesInFlow": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Pick newsletter recipients\n// Input: every LEADS row. Output: up to MAX_SENDS_PER_RUN recipients with the email already rendered.\n// If nobody can be mailed right now it outputs one \"summary\" item (recipient_count 0) so the run can\n// still decide whether the whole broadcast is finished.\nconst S = $('Lane 2 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst letter = $('Lane 2 · Pick due content').all().map((item) => item.json).find((json) => json.kind === 'newsletter');\n\nconst escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nfunction render(template, values) {\n  const missing = new Set();\n  const text = String(template ?? '').replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (token, key) => {\n    if (values[key] === undefined || values[key] === null) { missing.add(key); return token; }\n    return String(values[key]);\n  });\n  return { text, missing: [...missing] };\n}\nconst clean = (value) => String(value ?? '').trim();\nconst csv = (value) => clean(value).split(',').map((part) => part.trim()).filter(Boolean);\nconst ACTIVE = ['new', 'nurturing', 'nurture_done', 'replied', 'hot'];                  // SPEC 3.2\nconst isActive = (lead) => ACTIVE.includes(clean(lead.status).toLowerCase())\n  && isTrue(lead.consent) && clean(lead.email_allowed).toUpperCase() !== 'FALSE';\n\nconst leads = $input.all().map((item) => item.json).filter((lead) => clean(lead?.lead_id) !== '');\nconst already = leads.filter((lead) => clean(lead.last_newsletter_id) === letter.content_id);\nconst waiting = leads.filter((lead) => isActive(lead) && clean(lead.last_newsletter_id) !== letter.content_id);\n// Cross-lane guard (session 5): Lane 4 reads LEADS at :15 while this run (started at :00) may still be sending, so the gap\n// rule alone cannot see a nurture email Lane 4 is about to send. A lead Lane 4 will email within the next minute\n// (status new/nurturing, next_action_at blank or due by then) is left to Lane 4; it gets the newsletter on a later run.\nconst NURTURE_HORIZON_MS = 60 * 1000;\nconst reservedForNurture = (lead) => ['new', 'nurturing'].includes(clean(lead.status).toLowerCase())\n  && (!parseTs(lead.next_action_at) || parseTs(lead.next_action_at).toMillis() <= now.toMillis() + NURTURE_HORIZON_MS);\nconst ready = waiting.filter((lead) => gapOk(lead, now) && !reservedForNurture(lead));    // gap rule (SPEC 5.3) + guard\nconst chosen = ready.slice(0, Number(S.MAX_SENDS_PER_RUN));\n\nconst launch = parseDate(S.LAUNCH_DATE);\nconst fmt = (d) => (d ? d.toFormat('cccc, d LLLL') : '');\nconst shared = {\n  unsubscribe_line: S.UNSUBSCRIBE_LINE, launch_date: fmt(launch),\n  public_launch_date: fmt(launch && launch.plus({ days: Number(S.EARLY_ACCESS_DAYS) })),\n  waitlist_form_url: S.WAITLIST_FORM_URL, sender_name: S.SENDER_NAME,\n};\nconst ctx = { content_id: letter.content_id, prior_sent: already.length, remaining_before: waiting.length };\n\nif (!chosen.length) return [{ json: { kind: 'summary', recipient_count: 0, ctx } }];\n\nreturn chosen.map((lead) => {\n  const firstName = clean(lead.first_name) || 'there';\n  const textValues = { ...shared, first_name: firstName, city: clean(lead.city) };       // for the subject (plain text)\n  const htmlValues = Object.fromEntries(Object.entries(textValues).map(([k, v]) => [k, escapeHtml(v)]));   // for the body (HTML)\n  const subject = render(letter.title, textValues).text.replace(/[\\r\\n]+/g, ' ').trim();\n  let html = render(letter.body, htmlValues).text;\n  if (!/\\{\\{\\s*unsubscribe_line\\s*\\}\\}/.test(letter.body)) html += `\\n<p>${htmlValues.unsubscribe_line}</p>`;   // always give people a way out\n  return { json: {\n    kind: 'recipient', recipient_count: chosen.length, ctx,\n    lead_id: clean(lead.lead_id), to_email: clean(lead.email).toLowerCase(), lead_status: clean(lead.status),\n    thread_ids: clean(lead.thread_ids), content_id: letter.content_id,\n    subject, html, sender_name: S.SENDER_NAME,\n  } };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        1920
+      ],
+      "id": "fafafd22-937b-5f6c-8564-1c3c06a7b6eb",
+      "name": "Lane 2 · Pick newsletter recipients",
+      "notes": "Up to MAX_SENDS_PER_RUN",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b73ba3c9-e9e1-5589-8264-569ba007fe1e",
+              "leftValue": "={{ $json.recipient_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2440,
+        1920
+      ],
+      "id": "786c393f-bf5b-5f4a-8826-ec481b54cfd2",
+      "name": "Lane 2 · Any recipient to send?",
+      "notes": "recipient_count > 0",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2660,
+        1840
+      ],
+      "id": "4852ce55-f361-53da-84f7-a41cc8807531",
+      "name": "Lane 2 · Loop over recipients",
+      "notes": "One lead at a time",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Demo safety gate: input items carry the recipient in `to_email` (SPEC 5.7).\nconst S = $('Lane 2 · Settings to object').first().json;\nconst PUBLIC = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.in', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'rediffmail.com', 'proton.me', 'protonmail.com'];\nconst list = (value) => String(value ?? '').toLowerCase().split(',').map((part) => part.trim()).filter(Boolean);\nfunction checkRecipient(email) {\n  const match = /^([a-z0-9._%-]+)(\\+[a-z0-9._%-]*)?@([a-z0-9.-]+\\.[a-z]{2,})$/.exec(email);\n  if (!match) return { ok: false, reason: 'not a single valid email address' };\n  const base = `${match[1]}@${match[3]}`;                      // plus-tag removed\n  const inboxes = [...list(S.ALLOWED_DEMO_INBOXES), ...list(S.SENDER_EMAIL)];\n  const domains = list(S.ALLOWED_EMAIL_DOMAINS).map((d) => d.replace(/^@/, '')).filter((d) => !PUBLIC.includes(d));\n  if (inboxes.includes(base)) return { ok: true, reason: 'demo inbox' };\n  if (domains.includes(match[3])) return { ok: true, reason: 'demo domain' };\n  return { ok: false, reason: 'not in ALLOWED_DEMO_INBOXES or ALLOWED_EMAIL_DOMAINS' };\n}\nreturn $input.all().map((item) => {\n  const to = String(item.json.to_email ?? '').trim().toLowerCase();\n  const check = checkRecipient(to);\n  return { json: { ...item.json, safe_to: check.ok ? to : '', gate_ok: check.ok, gate_reason: check.reason } };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        1840
+      ],
+      "id": "61f9361b-0378-5641-8593-8f97cafc6050",
+      "name": "Lane 2 · Demo safety gate",
+      "notes": "Demo inboxes only",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "75af94b0-db43-598e-82d9-1e711fc3cd93",
+              "leftValue": "={{ $json.gate_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3100,
+        1840
+      ],
+      "id": "22c1b01b-f025-5f28-8d9a-572317b09adb",
+      "name": "Lane 2 · Recipient allowed?",
+      "notes": "true = may send",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.safe_to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "={{ $json.sender_name }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3320,
+        1760
+      ],
+      "id": "1ac7b824-c84b-5dae-8bfb-2eecaf8cd2a1",
+      "name": "Lane 2 · Send newsletter email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": null,
+          "name": "Kaya Demo · Gmail Sender"
+        }
+      },
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "notes": "No retry (could double-send)",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build lead update: right after Gmail accepted the email.\n// Output = ONLY the LEADS columns Lane 2 owns (last_newsletter_id, last_contacted_at, thread_ids, updated_at).\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst S = $('Lane 2 · Settings to object').first().json;\nconst sent = $input.first().json ?? {};\nconst lead = $('Lane 2 · Demo safety gate').first().json;          // the recipient of this loop round\nconst threadId = String(sent.threadId ?? '').trim();\nlet ids = String(lead.thread_ids ?? '').split(',').map((part) => part.trim()).filter(Boolean);\nif (threadId && !ids.includes(threadId)) ids.push(threadId);\nids = ids.slice(-10);                                               // SPEC 2.4: keep the last 10\nreturn [{ json: {\n  lead_id: lead.lead_id, last_newsletter_id: lead.content_id, last_contacted_at: nowTs(),\n  thread_ids: ids.join(','), updated_at: nowTs(),\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3540,
+        1740
+      ],
+      "id": "0017190b-bb0e-5a41-8660-0aafdf5cae66",
+      "name": "Lane 2 · Build lead update",
+      "notes": "Owned LEADS columns",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_handle",
+              "displayName": "instagram_handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interest",
+              "displayName": "interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "occasion",
+              "displayName": "occasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_allowed",
+              "displayName": "email_allowed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment",
+              "displayName": "segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score_reason",
+              "displayName": "score_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sequence_id",
+              "displayName": "sequence_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seq_step",
+              "displayName": "seq_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "next_action_at",
+              "displayName": "next_action_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_contacted_at",
+              "displayName": "last_contacted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "launch_step",
+              "displayName": "launch_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_newsletter_id",
+              "displayName": "last_newsletter_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_ids",
+              "displayName": "thread_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reply_at",
+              "displayName": "last_reply_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply_class",
+              "displayName": "reply_class",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3760,
+        1740
+      ],
+      "id": "21d47add-9328-5d3a-880f-e5b2e89ea3cc",
+      "name": "Lane 2 · Update LEAD after send",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Before the next lead",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build blocked update: the safety gate refused this address. Never email it again.\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst lead = $input.first().json;\nreturn [{ json: { lead_id: lead.lead_id, status: 'blocked', email_allowed: 'FALSE', updated_at: nowTs() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        1960
+      ],
+      "id": "b344a8cd-6864-5ecf-86c2-e19b55de214f",
+      "name": "Lane 2 · Build blocked update",
+      "notes": "blocked + FALSE",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_handle",
+              "displayName": "instagram_handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interest",
+              "displayName": "interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "occasion",
+              "displayName": "occasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_allowed",
+              "displayName": "email_allowed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment",
+              "displayName": "segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score_reason",
+              "displayName": "score_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sequence_id",
+              "displayName": "sequence_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seq_step",
+              "displayName": "seq_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "next_action_at",
+              "displayName": "next_action_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_contacted_at",
+              "displayName": "last_contacted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "launch_step",
+              "displayName": "launch_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_newsletter_id",
+              "displayName": "last_newsletter_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_ids",
+              "displayName": "thread_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reply_at",
+              "displayName": "last_reply_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply_class",
+              "displayName": "reply_class",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3540,
+        1960
+      ],
+      "id": "2135ae24-3f4f-5eed-8299-2b816af843ef",
+      "name": "Lane 2 · Update LEAD as blocked",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Never emailed again",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build send log\n// Three ways into this node, once per loop round: email sent (lead row updated), address blocked\n// (lead row updated) or Gmail failed (an error item). It writes ONE log event for what happened.\nconst S = $('Lane 2 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 2,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst lead = $('Lane 2 · Demo safety gate').first().json;\nconst input = $input.first().json ?? {};\nconst pause = { pause_seconds: Number(S.SEND_DELAY_SECONDS) };      // extra field, used by the Wait node; the log append ignores it\n\n// Gmail's error output carries an `error` field (and may repeat the input fields); the lead-row echo from a successful update never has one.\nif (input.error !== undefined && input.error !== null && input.error !== '') {\n  const err = input.error;\n  const detail = typeof err === 'string' ? err : (err?.description ?? err?.message ?? JSON.stringify(err));\n  return [{ json: { ...event({\n    event_type: 'email_failed', entity_type: 'lead', entity_id: lead.lead_id, channel: 'email',\n    detail: `Newsletter ${lead.content_id} not sent: ${detail}`, meta: { error: String(detail).slice(0, 300), content_id: lead.content_id },\n  }), ...pause } }];\n}\nif (lead.gate_ok === false) {\n  return [{ json: { ...event({\n    event_type: 'email_blocked', entity_type: 'lead', entity_id: lead.lead_id, status_from: lead.lead_status, status_to: 'blocked', channel: 'email',\n    detail: `Newsletter ${lead.content_id} blocked: ${lead.gate_reason}`, meta: { reason: lead.gate_reason, content_id: lead.content_id },\n  }), ...pause } }];\n}\nconst threadId = String(input.thread_ids ?? '').split(',').map((part) => part.trim()).filter(Boolean).pop() ?? '';\nreturn [{ json: { ...event({\n  event_type: 'email_sent', entity_type: 'lead', entity_id: lead.lead_id, channel: 'email',\n  detail: `Newsletter ${lead.content_id} sent`, meta: { content_id: lead.content_id, thread_id: threadId },\n}), ...pause } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3980,
+        1840
+      ],
+      "id": "36315ec4-abab-5c0f-8160-1b238f53b96d",
+      "name": "Lane 2 · Build send log",
+      "notes": "sent / blocked / failed",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4200,
+        1840
+      ],
+      "id": "a79d34eb-7687-5c37-85dc-05aadc27fcfc",
+      "name": "Lane 2 · Save send to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.pause_seconds }}",
+        "unit": "seconds"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4420,
+        1840
+      ],
+      "id": "97837791-441c-5b55-8398-39e9390d2e37",
+      "name": "Lane 2 · Pause between emails",
+      "webhookId": "5f966b78-7430-5dfc-816b-df0bdf1b9154",
+      "notes": "SEND_DELAY_SECONDS",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Check newsletter finished\n// Arrives from two places: the recipient loop (items = the log events of this run) or straight from\n// \"Any recipient to send?\" (one summary item, nothing was sent). Either way:\n//   still waiting = leads that need the newsletter (before this run) - sent now - blocked now.\n// 0 left -> output the CONTENT update that marks it published. Otherwise output nothing; the next run continues.\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst S = $('Lane 2 · Settings to object').first().json;\nconst ctx = $('Lane 2 · Pick newsletter recipients').first().json.ctx;\nconst events = $input.all().map((item) => item.json);\nconst sentNow = events.filter((e) => e.event_type === 'email_sent').length;\nconst blockedNow = events.filter((e) => e.event_type === 'email_blocked').length;\nconst left = ctx.remaining_before - sentNow - blockedNow;\nif (left > 0) return [];\nreturn [{ json: {\n  content_id: ctx.content_id, status: 'published', published_at: nowTs(),\n  publish_ref: `newsletter:${ctx.prior_sent + sentNow} sent`, last_error: '', updated_at: nowTs(),\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        2060
+      ],
+      "id": "7e9100bd-09e5-5be3-8049-3aa1716d1615",
+      "name": "Lane 2 · Check newsletter finished",
+      "notes": "Anyone left waiting?",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "content_id"
+          ],
+          "schema": [
+            {
+              "id": "content_id",
+              "displayName": "content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "batch_id",
+              "displayName": "batch_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "asset_type",
+              "displayName": "asset_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hashtags",
+              "displayName": "hashtags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cta",
+              "displayName": "cta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "media_notes",
+              "displayName": "media_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_title",
+              "displayName": "seo_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_description",
+              "displayName": "meta_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_keyword",
+              "displayName": "target_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_score",
+              "displayName": "seo_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scheduled_for",
+              "displayName": "scheduled_for",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_content_id",
+              "displayName": "source_content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_provider",
+              "displayName": "ai_provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_notes",
+              "displayName": "review_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publish_ref",
+              "displayName": "publish_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2880,
+        2060
+      ],
+      "id": "5c6e8b52-fd02-5a22-8297-27b8e8f72699",
+      "name": "Lane 2 · Update CONTENT after newsletter",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "status = published",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 2 · Build newsletter done log: the broadcast is complete.\nconst S = $('Lane 2 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 2,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst saved = $input.first().json;\nreturn [{ json: event({\n  event_type: 'content_published', entity_type: 'content', entity_id: saved.content_id,\n  status_from: 'publishing', status_to: 'published', channel: 'email',\n  detail: `newsletter finished (${saved.publish_ref})`, meta: { publish_ref: saved.publish_ref, asset_type: 'newsletter' },\n}) }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        2060
+      ],
+      "id": "fc9b6e66-9962-5c31-8363-42648d49e8d6",
+      "name": "Lane 2 · Build newsletter done log",
+      "notes": "content_published",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3320,
+        2060
+      ],
+      "id": "c6864058-1422-5c7b-8b6a-dc21dcb1eda6",
+      "name": "Lane 2 · Save newsletter done to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "Lane 2 · Every minute": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Read SETTINGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Read SETTINGS": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Settings to object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Settings to object": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Read CONTENT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Read CONTENT": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Pick due content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Pick due content": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Route by kind",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Route by kind": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Loop over posts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Newsletter needs publishing?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Build problem update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build problem update": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Update CONTENT with problem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Update CONTENT with problem": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build problem log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build problem log": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Save problem to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Loop over posts": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Lane 2 · Build Telegram message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build Telegram message": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build publish result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Build publish result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build publish result": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Update CONTENT after post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Update CONTENT after post": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build post log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build post log": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Save post to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Save post to EVENTS_LOG": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Loop over posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Newsletter needs publishing?": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build publishing update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Read LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build publishing update": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Mark newsletter publishing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Mark newsletter publishing": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Read LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Read LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Pick newsletter recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Pick newsletter recipients": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Any recipient to send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Any recipient to send?": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Loop over recipients",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Check newsletter finished",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Loop over recipients": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Check newsletter finished",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Demo safety gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Demo safety gate": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Recipient allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Recipient allowed?": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Send newsletter email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Build blocked update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Send newsletter email": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build lead update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 2 · Build send log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build lead update": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Update LEAD after send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Update LEAD after send": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build send log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build blocked update": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Update LEAD as blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Update LEAD as blocked": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build send log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build send log": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Save send to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Save send to EVENTS_LOG": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Pause between emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Pause between emails": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Loop over recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Check newsletter finished": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Update CONTENT after newsletter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Update CONTENT after newsletter": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Build newsletter done log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 2 · Build newsletter done log": {
+      "main": [
+        [
+          {
+            "node": "Lane 2 · Save newsletter done to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

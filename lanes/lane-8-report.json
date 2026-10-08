@@ -1,0 +1,1134 @@
+{
+  "name": "Kaya Jewels demo · Lane 8 · Report",
+  "nodes": [
+    {
+      "name": "Lane 8 · Report",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "## 📊 Lane 8 · Report  ·  trigger: every 5 minutes (cron `50 */5 * * * *`)\n**What it does:** wakes up every 5 minutes, reads the EVENTS_LOG and decides in code whether a report is DUE (demo mode: every `DEMO_REPORT_EVERY_MINUTES`; real mode: once a day after `REPORT_TIME`). If not due it ends quietly. If due it reads CONTENT, LEADS and PROSPECTS, computes every metric of SPEC 2.8, writes them to **DASHBOARD**, asks Gemini (fallback Groq) for 3 insights based ONLY on those numbers, and sends the owner a Telegram report.\n**Tabs:** reads SETTINGS, EVENTS_LOG, CONTENT, LEADS, PROSPECTS · writes DASHBOARD (`metric_key, value, updated_at` only) and EVENTS_LOG.\n**Credentials:** Kaya Demo · Google Sheets, Gemini, Groq, Telegram Bot.  **Docs:** SPEC.md §7.8 and §2.8 · docs/lane-8.md explains every node.",
+        "height": 1000,
+        "width": 5200,
+        "color": 1
+      },
+      "id": "69125180-0730-5400-a050-7fe5d876d9b1",
+      "position": [
+        -240,
+        8400
+      ]
+    },
+    {
+      "name": "Lane 8 · How the AI step works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "### Optional AI insights\nOnly the computed metrics are sent. A reply is accepted only if it has 3 insights and **every number in it is one of the metrics**; otherwise Gemini → Groq fallback, and if both fail the report goes out without insights (logged as `ai_failed`).",
+        "height": 90,
+        "width": 1500,
+        "color": 7
+      },
+      "id": "fbde19e5-89cd-5764-ab33-ee07d2196b79",
+      "position": [
+        1900,
+        9300
+      ]
+    },
+    {
+      "name": "Lane 8 · Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "50 */5 * * * *"
+            }
+          ]
+        }
+      },
+      "notes": "50 */5 * * * *",
+      "notesInFlow": true,
+      "id": "c01f501a-9937-55bc-a748-ece254ec9130",
+      "position": [
+        0,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Read SETTINGS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SETTINGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of SETTINGS",
+      "notesInFlow": true,
+      "id": "e076688c-0457-5d5b-ab01-68bba91a18ca",
+      "position": [
+        220,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Settings to object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// SETTINGS arrives as one item per row (key | value | type | description).\n// Turn it into ONE item, e.g. { DEMO_MODE: 'TRUE', MAX_SENDS_PER_RUN: '3', ... },\n// so every later node can read settings with $('Lane 8 · Settings to object').first().json.KEY\nconst settings = {};\nfor (const item of $input.all()) {\n  const key = String(item.json.key ?? '').trim();\n  if (!key) continue;\n  const value = item.json.value;\n  settings[key] = typeof value === 'string' ? value.trim() : (value ?? '');\n}\n\n// Stop early with a clear message if the sheet is missing something this lane needs.\nconst required = [\"DEMO_MODE\",\"DEMO_MINUTES_PER_DAY\",\"REPORT_TIME\",\"DEMO_REPORT_EVERY_MINUTES\",\"TELEGRAM_OWNER_CHAT_ID\",\"SHEET_URL\",\"BRAND_VOICE\",\"GEMINI_MODEL\",\"GROQ_MODEL\",\"AI_TEMPERATURE\"];\nconst missing = required.filter((key) => settings[key] === undefined || settings[key] === '');\nif (missing.length) {\n  throw new Error(`The SETTINGS tab is missing a value for: ${missing.join(', ')}`);\n}\n\n// Derived values (SPEC section 5.3). Sheet booleans may come back as true or \"TRUE\".\nsettings.IS_DEMO = String(settings.DEMO_MODE).trim().toUpperCase() === 'TRUE';\nconst demoMinutes = Number(settings.DEMO_MINUTES_PER_DAY);\nif (settings.IS_DEMO && !(demoMinutes > 0)) {\n  throw new Error('DEMO_MINUTES_PER_DAY must be a number above 0 when DEMO_MODE is TRUE');\n}\nsettings.DAY_MS = settings.IS_DEMO ? demoMinutes * 60 * 1000 : 24 * 60 * 60 * 1000;\n\nreturn [{ json: settings }];"
+      },
+      "notes": "Rows → one settings item",
+      "notesInFlow": true,
+      "id": "02a705b3-b68d-59c6-a346-260057f568c7",
+      "position": [
+        440,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Read EVENTS_LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "To find the last report",
+      "notesInFlow": true,
+      "id": "95bb7a0e-a55e-5a01-a429-e49410813908",
+      "position": [
+        660,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Check if report is due",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Decides whether a report is due (SPEC 7.8). L = time of the latest `report_sent` event.\n//  demo mode: due if there is no report yet, or now - L >= DEMO_REPORT_EVERY_MINUTES\n//  real mode: due if now >= today at REPORT_TIME and L is before today's REPORT_TIME (or there is none)\nconst S = $('Lane 8 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\nconst now = $now.setZone(TZ);\n\nlet last = null;\nfor (const row of rowsOf('Lane 8 · Read EVENTS_LOG')) {\n  if (String(row.event_type ?? '').trim() !== 'report_sent') continue;\n  const t = parseTs(row.ts);\n  if (t && (!last || t.toMillis() > last.toMillis())) last = t;\n}\n\nlet due = false;\nlet reason = '';\nif (S.IS_DEMO) {\n  const every = Number(S.DEMO_REPORT_EVERY_MINUTES);\n  if (!(every > 0)) throw new Error('DEMO_REPORT_EVERY_MINUTES must be a number above 0 in demo mode');\n  if (!last) { due = true; reason = 'no report has been sent yet'; }\n  else {\n    const minutes = (now.toMillis() - last.toMillis()) / 60000;\n    due = minutes >= every;\n    reason = `${minutes.toFixed(1)} min since the last report (every ${every})`;\n  }\n} else {\n  const match = /^(\\d{1,2}):(\\d{2})$/.exec(String(S.REPORT_TIME));\n  if (!match) throw new Error('REPORT_TIME must look like 21:00');\n  const todayAt = now.startOf('day').set({ hour: Number(match[1]), minute: Number(match[2]) });\n  due = now.toMillis() >= todayAt.toMillis() && (!last || last.toMillis() < todayAt.toMillis());\n  reason = `today's report time is ${S.REPORT_TIME}`;\n}\nreturn [{ json: { due, reason, period_start: last ? last.toFormat(STAMP) : '' } }];\n"
+      },
+      "notes": "Is a report due now?",
+      "notesInFlow": true,
+      "id": "51d76f43-ef37-5e3f-a95b-dbf0bad749cc",
+      "position": [
+        880,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Report due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "42a5640b-2b2f-5b67-abd2-589d9167c7fc",
+              "leftValue": "={{ $json.due }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "false = quiet end",
+      "notesInFlow": true,
+      "id": "9f4b702b-7e6e-5025-a324-7f404cd44648",
+      "position": [
+        1100,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Read CONTENT",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of CONTENT",
+      "notesInFlow": true,
+      "id": "136785fa-d6f8-5bfb-ab39-dd6f5f20eb8a",
+      "position": [
+        1320,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Read LEADS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of LEADS",
+      "notesInFlow": true,
+      "id": "4ef04552-8ddc-5d3c-a158-0244e181e0e1",
+      "position": [
+        1540,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Read PROSPECTS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "PROSPECTS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of PROSPECTS",
+      "notesInFlow": true,
+      "id": "7862bcba-1cbf-5f8b-a9d4-7b4119a22182",
+      "position": [
+        1760,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Compute metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Computes every metric of SPEC 2.8. \"Period\" = events after the previous report_sent (all time if there was none).\nconst S = $('Lane 8 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\nconst now = $now.setZone(TZ);\nconst periodStartText = $('Lane 8 · Check if report is due').first().json.period_start;\nconst periodStart = parseTs(periodStartText);\n\nconst content = rowsOf('Lane 8 · Read CONTENT').filter((r) => String(r.content_id ?? '').trim());\nconst leads = rowsOf('Lane 8 · Read LEADS').filter((r) => String(r.lead_id ?? '').trim());\nconst prospects = rowsOf('Lane 8 · Read PROSPECTS').filter((r) => String(r.prospect_id ?? '').trim());\nconst events = rowsOf('Lane 8 · Read EVENTS_LOG').filter((r) => String(r.event_type ?? '').trim());\n\nconst txt = (v) => String(v ?? '').trim();\nconst inPeriod = (e) => !periodStart || (parseTs(e.ts) && parseTs(e.ts).toMillis() > periodStart.toMillis());\nconst ofType = (type) => events.filter((e) => txt(e.event_type) === type);\nconst mean = (rows, field) => {\n  const values = rows.map((r) => (txt(r[field]) === '' ? NaN : Number(r[field]))).filter(Number.isFinite);\n  return values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;\n};\nconst meta = (e) => { try { return JSON.parse(e.meta_json || '{}'); } catch { return {}; } };\n\nconst status = (r) => txt(r.status);\nconst REPLIED = ['replied', 'interested', 'not_interested', 'do_not_contact', 'won', 'lost'];\nconst contacted = prospects.filter((p) => Number(txt(p.seq_step) || 0) >= 1).length;\nconst replied = prospects.filter((p) => REPLIED.includes(status(p))).length;\nconst emailSent = ofType('email_sent');\n\nconst metrics = {\n  content_total: content.length,\n  content_pending_approval: content.filter((r) => status(r) === 'pending_approval').length,\n  content_approved: content.filter((r) => ['approved', 'publishing'].includes(status(r))).length,\n  content_published: content.filter((r) => status(r) === 'published').length,\n  content_avg_seo_score: mean(content, 'seo_score'),\n  leads_total: leads.length,\n  leads_new_period: ofType('lead_captured').filter(inPeriod).length,\n  leads_hot: leads.filter((r) => txt(r.segment) === 'hot' || status(r) === 'hot').length,\n  leads_warm: leads.filter((r) => txt(r.segment) === 'warm').length,\n  leads_cold: leads.filter((r) => txt(r.segment) === 'cold').length,\n  leads_avg_score: mean(leads, 'score'),\n  leads_unsubscribed: leads.filter((r) => status(r) === 'unsubscribed').length,\n  leads_blocked: leads.filter((r) => status(r) === 'blocked').length,\n  emails_sent_total: emailSent.length,\n  emails_sent_period: emailSent.filter(inPeriod).length,\n  emails_blocked_total: ofType('email_blocked').length,\n  launch_emails_sent: emailSent.filter((e) => txt(e.lane) === '5').length,\n  prospects_total: prospects.length,\n  prospects_contacted: contacted,\n  prospects_replied: replied,\n  prospects_interested: prospects.filter((p) => ['interested', 'won'].includes(status(p))).length,\n  outreach_reply_rate_pct: contacted > 0 ? Math.round((replied / contacted) * 1000) / 10 : 0,\n  replies_total: ofType('reply_received').length,\n  hot_alerts_total: ofType('hot_alert_sent').length,\n  channel_posts_total: ofType('content_published').filter((e) => txt(e.channel) === 'telegram_channel').length + ofType('launch_post_published').length,\n  ai_calls_total: ofType('ai_call').length,\n  ai_fallbacks_total: ofType('ai_fallback').length,\n  ai_failures_total: ofType('ai_failed').length,\n  errors_period: ofType('error').filter(inPeriod).length,\n  last_report_at: now.toFormat(STAMP),\n};\nreturn [{ json: { metrics, period_start: periodStartText, period_text: periodStart ? `since ${periodStart.toFormat('d LLL HH:mm')}` : 'all time (first report)' } }];\n"
+      },
+      "notes": "All metrics of SPEC 2.8",
+      "notesInFlow": true,
+      "id": "fcb1bf67-0ce1-5330-adc3-81e601cc6522",
+      "position": [
+        1980,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Prepare dashboard rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// One clean row per metric: ONLY metric_key, value and updated_at (SPEC 5.4: DASHBOARD is written by Append or Update on metric_key).\nconst { metrics } = $input.first().json;\nconst ts = $now.setZone('Asia/Kolkata').toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\");\nreturn Object.entries(metrics).map(([metric_key, value]) => ({ json: { metric_key, value, updated_at: ts } }));\n"
+      },
+      "notes": "Key, value, updated_at",
+      "notesInFlow": true,
+      "id": "18665285-7c50-568a-a42b-cea96bd556b9",
+      "position": [
+        2200,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Save to DASHBOARD",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "DASHBOARD",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "metric_key"
+          ],
+          "schema": [
+            {
+              "id": "metric_key",
+              "displayName": "metric_key",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "label",
+              "displayName": "label",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "unit",
+              "displayName": "unit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append or update by metric_key",
+      "notesInFlow": true,
+      "id": "c58e0524-f021-57ab-a7e1-07137ee1efcc",
+      "position": [
+        2420,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Back to one item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// The DASHBOARD node returns one item per metric. Collapse back to ONE item so the AI and Telegram steps run once.\nreturn [{ json: { dashboard_rows: $input.all().length } }];\n"
+      },
+      "notes": "Many rows → one item",
+      "notesInFlow": true,
+      "id": "ccb86289-1b6c-58c7-a222-dbc5037fd6b6",
+      "position": [
+        2640,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Build AI request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Builds the prompt for the optional \"3 insights\" AI call plus the exact request bodies for Gemini (main) and Groq (fallback).\n// Only the computed metrics are sent (as JSON). No other facts are given, and none may be invented.\nconst S = $('Lane 8 · Settings to object').first().json;\nconst computed = $('Lane 8 · Compute metrics').first().json;\nconst { last_report_at, ...metricsForAi } = computed.metrics;       // a timestamp only invites made-up numbers\n\nconst system = [\n  'You write the short management summary of a campaign report for Kaya Jewels, a handmade jewellery brand from Jaipur.',\n  '',\n  'BRAND VOICE',\n  S.BRAND_VOICE,\n  '',\n  'RULES (most important)',\n  '1. The METRICS JSON in the user message is the only source of truth. Use nothing else.',\n  '2. Mention only numbers that appear in the METRICS JSON, written exactly as they appear there. Never add, subtract, round, convert or estimate numbers, and never write any other number (no dates, no percentages that are not in the JSON, no counts of items).',\n  '3. Never invent causes, events, customers, people, products, prices, dates or quotes.',\n  '4. Write exactly 3 insights, each at most 30 words, plain text without markdown: (1) what happened, (2) what is working, (3) one recommended action.',\n  '5. Answer with one JSON object only: { \"insights\": [string, string, string] }',\n].join('\\n');\nconst prompt = `METRICS (JSON, ${computed.period_text}):\\n${JSON.stringify(metricsForAi)}`;\n\nconst temperature = Number(S.AI_TEMPERATURE);\nconst geminiBody = {\n  systemInstruction: { parts: [{ text: system }] },\n  contents: [{ role: 'user', parts: [{ text: prompt }] }],\n  generationConfig: {\n    temperature: Number.isFinite(temperature) ? temperature : 0.7, maxOutputTokens: 8192, responseMimeType: 'application/json',\n    responseSchema: { type: 'OBJECT', properties: { insights: { type: 'ARRAY', items: { type: 'STRING' }, minItems: 3, maxItems: 3 } }, required: ['insights'], propertyOrdering: ['insights'] },\n  },\n};\nconst budget = String(S.GEMINI_THINKING_BUDGET ?? '').trim();\nif (budget !== '' && Number.isFinite(Number(budget))) geminiBody.generationConfig.thinkingConfig = { thinkingBudget: Number(budget) };\n\nconst groqBody = {\n  model: S.GROQ_MODEL, temperature: Number.isFinite(temperature) ? temperature : 0.7, max_tokens: 1500,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: `${system}\\nReturn ONLY one JSON object with exactly this shape: ${JSON.stringify({ insights: ['what happened', 'what is working', 'one recommended action'] })}` },\n    { role: 'user', content: prompt },\n  ],\n};\nreturn [{ json: { gemini_model: S.GEMINI_MODEL, groq_model: S.GROQ_MODEL, started_at: Date.now(), request_id: `report:${$now.setZone('Asia/Kolkata').toFormat('yyyyMMdd-HHmmss')}:insights`, gemini_body: geminiBody, groq_body: groqBody, allowed_numbers: Object.values(metricsForAi).map((v) => String(Number(v))) } }];\n"
+      },
+      "notes": "Metrics only",
+      "notesInFlow": true,
+      "id": "31c90493-fe8b-5a99-a275-1ccf7c79ced8",
+      "position": [
+        2860,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Ask Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.gemini_model }}:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gemini_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "Kaya Demo · Gemini"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "notes": "Main AI · 3 tries",
+      "notesInFlow": true,
+      "id": "8d536fbb-ab1b-50f9-a790-b2f29da89c27",
+      "position": [
+        3080,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Read Gemini reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Pull the answer text out of Gemini's response. If the HTTP call failed (after its retries) the item only has an \"error\"\n// field; we pass that on so the check can switch to Groq.\nconst request = $('Lane 8 · Build AI request').first().json;\nconst response = $input.first().json;\n\nlet text = '';\nlet error = '';\nif (response.error) {\n  const { message, description } = response.error;\n  const detail = [message, description].filter(Boolean).join(' - ') || JSON.stringify(response.error);\n  error = `Gemini call failed: ${String(detail).slice(0, 300)}`;\n} else {\n  const candidate = (response.candidates || [])[0];\n  const parts = candidate?.content?.parts || [];\n  text = parts.filter((part) => !part.thought && typeof part.text === 'string').map((part) => part.text).join('');\n  const finish = candidate?.finishReason || response.promptFeedback?.blockReason || 'unknown';\n  if (!text) error = `Gemini returned no text (reason: ${finish})`;\n  else if (finish !== 'STOP') error = `Gemini stopped early (reason: ${finish})`;\n}\nreturn [{ json: { provider: 'gemini', model: request.gemini_model, text, error, fallback_reason: '' } }];\n"
+      },
+      "notesInFlow": false,
+      "id": "eedfa894-11cb-52c7-a3ed-f7545ea82ed4",
+      "position": [
+        3300,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Check AI answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Same check for both providers: valid JSON with 3 insights, and NO number that is not in the metrics.\n// A bad answer from Gemini sends the job to the Groq fallback (try_groq = true). A bad answer from Groq = AI failure (no insights).\nconst request = $('Lane 8 · Build AI request').first().json;\nconst reply = $input.first().json;\n\nfunction parseJson(text) {\n  let clean = String(text || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  const start = clean.indexOf('{');\n  const end = clean.lastIndexOf('}');\n  if (start !== -1 && end > start) clean = clean.slice(start, end + 1);\n  return JSON.parse(clean);\n}\n\nlet insights = null;\nlet error = reply.error || '';\nif (!error) {\n  try {\n    const data = parseJson(reply.text);\n    const list = Array.isArray(data.insights) ? data.insights.map((s) => String(s ?? '').trim()).filter(Boolean) : [];\n    if (list.length < 3) error = `${reply.provider} answer is incomplete: needs 3 insights`;\n    else insights = list.slice(0, 3);\n  } catch (parseError) {\n    error = `${reply.provider} answer is not valid JSON: ${parseError.message}`;\n  }\n}\nif (!error) {\n  // Reject any insight with a number that is not one of the metrics we supplied.\n  const allowed = new Set(request.allowed_numbers);\n  const invented = [];\n  for (const sentence of insights) {\n    for (const found of sentence.match(/\\d[\\d,]*(?:\\.\\d+)?/g) || []) {\n      const value = String(Number(found.replace(/,/g, '')));\n      if (!allowed.has(value)) invented.push(found);\n    }\n  }\n  if (invented.length) { error = `${reply.provider} used number(s) that are not in the metrics: ${[...new Set(invented)].join(', ')}`; insights = null; }\n}\n\nconst ok = !error;\nconst tryGroq = !ok && reply.provider === 'gemini';\nreturn [{\n  json: {\n    request_id: request.request_id, ai_ok: ok, ai_provider: reply.provider, ai_model: reply.model, ai_error: error,\n    fallback_reason: reply.fallback_reason || '', try_groq: tryGroq, duration_ms: Date.now() - request.started_at,\n    insights: ok ? insights : [], groq_body: tryGroq ? request.groq_body : null,\n  },\n}];\n"
+      },
+      "notes": "JSON + no invented numbers",
+      "notesInFlow": true,
+      "id": "71b55444-02cc-57a1-a76d-5fdf684a24e4",
+      "position": [
+        3520,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Need Groq fallback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7788b0b1-c5be-5b0b-acdb-b9e87a9d688f",
+              "leftValue": "={{ $json.try_groq }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "true = Gemini failed",
+      "notesInFlow": true,
+      "id": "fbd2ee98-b558-554a-ae2e-2c8bffab36c7",
+      "position": [
+        3740,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Ask Groq (fallback)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.groq_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "groqApi": {
+          "id": null,
+          "name": "Kaya Demo · Groq"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "notes": "Fallback AI · 3 tries",
+      "notesInFlow": true,
+      "id": "9fa2fb56-6efc-5a42-a593-e36c5e293198",
+      "position": [
+        3960,
+        8960
+      ]
+    },
+    {
+      "name": "Lane 8 · Read Groq reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Pull the answer text out of Groq's (OpenAI-style) response, and remember why we fell back.\nconst request = $('Lane 8 · Build AI request').first().json;\nconst response = $input.first().json;\nconst fallbackReason = $('Lane 8 · Need Groq fallback?').first(0)?.json?.ai_error || '';\n\nlet text = '';\nlet error = '';\nif (response.error) {\n  const { message, description } = response.error;\n  const detail = [message, description].filter(Boolean).join(' - ') || JSON.stringify(response.error);\n  error = `Groq call failed: ${String(detail).slice(0, 300)}`;\n} else {\n  const choice = (response.choices || [])[0];\n  text = choice?.message?.content || '';\n  if (!text) error = `Groq returned no text (reason: ${choice?.finish_reason || 'unknown'})`;\n}\nreturn [{ json: { provider: 'groq', model: request.groq_model, text, error, fallback_reason: fallbackReason } }];\n"
+      },
+      "notesInFlow": false,
+      "id": "e95fb5db-51e2-5fc7-aadc-156a40f0190b",
+      "position": [
+        4180,
+        8960
+      ]
+    },
+    {
+      "name": "Lane 8 · Build report message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Builds the Telegram report for the owner (SPEC 7.8). All numbers come from the computed metrics; insights (if any) from the AI check.\nconst S = $('Lane 8 · Settings to object').first().json;\nconst computed = $('Lane 8 · Compute metrics').first().json;\nconst m = computed.metrics;\nconst ai = $input.first().json;\nconst tg = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst lines = [\n  '📊 <b>Kaya Jewels · campaign report</b>',\n  `<i>Period: ${tg(computed.period_text)}</i>`,\n  '',\n  `<b>Content</b>: ${m.content_pending_approval} waiting for approval · ${m.content_published} published (of ${m.content_total})`,\n  `<b>Leads</b>: ${m.leads_total} total · ${m.leads_new_period} new this period · ${m.leads_hot} hot`,\n  `<b>Emails</b>: ${m.emails_sent_total} sent in total (${m.emails_sent_period} this period)`,\n  `<b>Outreach</b>: ${m.prospects_contacted} contacted · ${m.prospects_replied} replied · ${m.prospects_interested} interested · reply rate ${m.outreach_reply_rate_pct}%`,\n  `<b>AI</b>: ${m.ai_fallbacks_total} fallbacks to Groq`,\n  `<b>Errors</b>: ${m.errors_period} this period`,\n];\nif (ai.ai_ok && ai.insights?.length) {\n  lines.push('', '<b>Insights</b>');\n  for (const insight of ai.insights) lines.push(`• ${tg(insight)}`);\n}\nlines.push('', `<a href=\"${String(S.SHEET_URL).replace(/&/g, '&amp;').replace(/\"/g, '&quot;')}\">Open the campaign sheet</a>`);\nreturn [{ json: { chat_id: String(S.TELEGRAM_OWNER_CHAT_ID), text: lines.join('\\n').slice(0, 4000), ai } }];\n"
+      },
+      "notes": "Numbers + insights",
+      "notesInFlow": true,
+      "id": "7a5bc405-8db5-59bb-ad65-e894ddd8a15b",
+      "position": [
+        3960,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Send report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "webhookId": "72e09a1c-3323-5b3f-a90d-a1c0be1145ed",
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Kaya Demo · Telegram Bot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "notes": "To TELEGRAM_OWNER_CHAT_ID",
+      "notesInFlow": true,
+      "id": "2629a6e4-d52c-5577-a413-68105f6b2ef4",
+      "position": [
+        4180,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Build log events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Writes what happened to EVENTS_LOG (SPEC 5.6): the dashboard write, the AI call (+ fallback / failure) and the report itself.\nconst S = $('Lane 8 · Settings to object').first().json;\nconst TZ = 'Asia/Kolkata';\n// ---- event builder (SPEC 5.6)\nconst now = $now.setZone(TZ);\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 8,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst computed = $('Lane 8 · Compute metrics').first().json;\nconst rowsWritten = $('Lane 8 · Back to one item').first().json.dashboard_rows;\nconst ai = $('Lane 8 · Build report message').first().json.ai;   // the final AI result (Gemini, or Groq after a fallback)\nconst telegram = $input.first().json;\nconst reportId = `R-${now.toFormat('yyyyMMdd-HHmmss')}`;\nconst events = [];\n\nevents.push(event({ event_type: 'dashboard_updated', entity_type: 'report', entity_id: reportId, channel: 'sheet',\n  detail: `DASHBOARD updated with ${rowsWritten} metrics`, meta: { metrics: rowsWritten } }));\n\nconst aiMeta = { provider: ai.ai_provider, model: ai.ai_model, ok: ai.ai_ok, purpose: 'report_insights', duration_ms: ai.duration_ms };\nevents.push(event({ event_type: 'ai_call', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai',\n  detail: `report insights: ${ai.ai_ok ? 'ok' : 'failed'} via ${ai.ai_provider}`, meta: aiMeta }));\nif (ai.ai_provider === 'groq') {\n  events.push(event({ event_type: 'ai_fallback', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai',\n    detail: `Gemini failed, used Groq: ${ai.fallback_reason}`, meta: { ...aiMeta, reason: ai.fallback_reason } }));\n}\nif (!ai.ai_ok) {\n  events.push(event({ event_type: 'ai_failed', entity_type: 'ai', entity_id: ai.request_id, channel: 'ai',\n    detail: `${ai.ai_error} (report sent without insights)`, meta: { ...aiMeta, error: ai.ai_error } }));\n}\n\nconst sent = telegram.ok === true && telegram.result?.message_id !== undefined && !telegram.error;\nif (sent) {\n  events.push(event({ event_type: 'report_sent', entity_type: 'report', entity_id: reportId, channel: 'telegram_owner',\n    detail: `Report sent to the owner (${computed.period_text})`, meta: { period_start: computed.period_start, message_id: telegram.result.message_id } }));\n} else {\n  const message = typeof telegram.error === 'string' ? telegram.error : (telegram.error?.message || telegram.description || 'Telegram returned no message id');\n  events.push(event({ event_type: 'error', entity_type: 'report', entity_id: reportId, channel: 'telegram_owner',\n    detail: `Report not sent to Telegram (the dashboard was still updated): ${message}`, meta: { node: 'Lane 8 · Send report', message: String(message).slice(0, 300) } }));\n}\nreturn events.map((json) => ({ json }));\n"
+      },
+      "notes": "One row per action",
+      "notesInFlow": true,
+      "id": "a167bf3d-8fc1-5918-a64f-4d846d8fcf87",
+      "position": [
+        4400,
+        8800
+      ]
+    },
+    {
+      "name": "Lane 8 · Save to EVENTS_LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true,
+      "id": "748c7e76-76ec-5101-ad34-dad2e2f768da",
+      "position": [
+        4620,
+        8800
+      ]
+    }
+  ],
+  "connections": {
+    "Lane 8 · Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read SETTINGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read SETTINGS": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Settings to object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Settings to object": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read EVENTS_LOG": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Check if report is due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Check if report is due": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Report due?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Report due?": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read CONTENT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read CONTENT": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read PROSPECTS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read PROSPECTS": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Compute metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Compute metrics": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Prepare dashboard rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Prepare dashboard rows": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Save to DASHBOARD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Save to DASHBOARD": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Back to one item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Back to one item": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Build AI request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Build AI request": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Ask Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Ask Gemini": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read Gemini reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read Gemini reply": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Check AI answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Check AI answer": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Need Groq fallback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Need Groq fallback?": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Ask Groq (fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 8 · Build report message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Ask Groq (fallback)": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Read Groq reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Read Groq reply": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Check AI answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Build report message": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Send report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Send report": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 8 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 8 · Build log events": {
+      "main": [
+        [
+          {
+            "node": "Lane 8 · Save to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

@@ -1,84 +1,128 @@
 # PROGRESS
 
-Project: free n8n demo for **Marion Enroute**: one canvas, 8 lanes, fake client **Kaya Jewels**, Diwali launch of **The Roshni Edit**. Plan: 5 sessions. Contract: `SPEC.md`.
+Project: free n8n demo for **Marion Enroute**: one canvas, 8 lanes, fake client **Kaya Jewels**, Diwali launch of **The Roshni Edit**. Contract: `SPEC.md` (v1.1). Setup from zero: **`SETUP.md`**.
 
 ## Status at a glance
 
 | Session | Scope | Status |
 |---|---|---|
-| 1 | SPEC, sheet templates, Lane 1 (Content engine), docs, validator | **done** (this PR) |
-| 2 | Lanes 2 (Publisher) + 3 (Lead engine) | to do |
-| 3 | Lanes 4 (Sequence sender) + 5 (Launch engine) + 8 (Report) | to do |
-| 4 | Lanes 6 (Outreach) + 7 (Inbox) | to do |
-| 5 | Merge into one canvas, validate, end-to-end demo run, final docs | to do |
+| 1 | SPEC, sheet templates, Lane 1 (Content engine), docs, validator | done (PR #1) |
+| 2 | Lanes 2 (Publisher) + 3 (Lead engine) | done (PR #2) |
+| 3 | Lanes 4 (Sequence sender) + 5 (Launch engine) + 8 (Report) | done (PR #3) |
+| 4 | Lanes 6 (Outreach) + 7 (Inbox) | done (PR #4) |
+| 5 | Merge, cross-lane review and fixes, one canvas, full test, SETUP.md | **done** |
 
-The 2/3/4 split above is a suggestion (see "Open decisions"). Lanes only share the Google Sheet, so any split works.
+**What you import:** `lanes/marion-marketing-engine.json` (all 8 lanes, 256 nodes). The individual lane files stay in `lanes/` and are the source the canvas is built from (`node tools/build-canvas.mjs`).
 
-## Session 1: what was delivered
+**Not verified anywhere in this repo:** live calls to Google Sheets, Gmail, Telegram, Gemini and Groq, and the real Schedule / Form / Gmail trigger nodes firing on their own (no real accounts in the build environment). Everything else was run inside a real n8n 1.123.84 server. Your first run (SETUP.md part I) is the live test.
 
-| File | What it is |
+---
+
+## Session 5: what was done
+
+### 1. Merge
+PRs #2, #3 and #4 merged in that order. The only conflict was `tests/README.md` (sessions 3 and 4 both added one); it is now one index of all three test harnesses. Every session's tests, results and docs are kept.
+
+### 2. Cross-lane review (every lane against SPEC and against each other)
+
+| Check | Result |
 |---|---|
-| `SPEC.md` | The contract: credentials, all 8 tabs and columns, status pipelines, SETTINGS keys, conventions (naming, time, demo clock, Sheets rules, logging, safety gate, layout, IDs, AI pattern, templates, node versions), brand brief, per-lane responsibilities, merge checklist |
-| `sheets-template/*.csv` | One CSV per tab. SETTINGS (32 keys with defaults), BRIEF (38 facts and rules for the Diwali campaign), LEADS (15 fake waitlist leads in every status), PROSPECTS (6 boutiques + 6 micro-influencers on plus-addresses of `kayademo.customers@gmail.com`), SEQUENCES (4 sequences, 15 steps with HTML templates), CONTENT (2 older published posts), EVENTS_LOG (12 sample events), DASHBOARD (30 metric keys) |
-| `lanes/lane-1-content-engine.json` | Lane 1, ready to import (25 nodes) |
-| `NODES.md` | Every Lane 1 node explained: what and why |
-| `tools/validate-workflow.mjs` | Checks any lane file or the merged file against SPEC (structure, connections, unique names/ids, node versions, credential names, no secrets, safety gate before Gmail, Sheets settings, Wait limits, lane bands). Run: `node tools/validate-workflow.mjs lanes/lane-1-content-engine.json` |
+| Tab names, column names | all 8 lanes use the SPEC 2 tabs and columns; the end-to-end run checks every single sheet write against SPEC's "Written by" columns: 0 violations |
+| Status values, event types | every status a lane writes is in SPEC 3; every `event_type` in every lane is in the closed list of SPEC 5.6 |
+| Credential names | all 83 references use the 6 SPEC names; all link by name on import (CLI and editor) |
+| SETTINGS keys | every key any lane reads exists in `sheets-template/SETTINGS.csv` |
+| Node names, ids, webhook ids, form paths | unique across the canvas (`kaya-waitlist`, `kaya-demo-reply`); now checked by the validator |
+| Two lanes writing the same column | only where SPEC says so (LEADS `status/next_action_at/last_contacted_at/thread_ids`, PROSPECTS `status/next_action_at`); the races this allowed are fixed (below) |
+| Lead handoffs | Lane 7 → `hot`/`replied`/`unsubscribed` stops Lane 4 (it only sends to `new`/`nurturing`); `unsubscribed` and `blocked` are never emailed by Lanes 2, 4, 5 (end-to-end checked) |
+| Prospect handoffs | Lane 7 → `replied`/`interested`/`not_interested`/`do_not_contact` stops Lane 6 (it only sends to `new`/`contacted`), now also mid-run |
 
-### How Lane 1 was verified
+**Real conflicts found and fixed (smallest change each):**
 
-* `tools/validate-workflow.mjs` → valid, 0 warnings.
-* Imported with the real n8n CLI (**n8n 1.123.84**, the newest 1.x on npm): import succeeds, and all 7 credential references were linked automatically to credentials created with the SPEC names (`"id": ""` + name works).
-* Ran end to end inside a real n8n 1.123.84 server, with Google Sheets and Telegram swapped for stub nodes and Gemini/Groq pointed at a local mock API:
-  * **Mixed failures**: Gemini returned HTTP 500 for the reels (retried 3× five seconds apart, then Groq took over) and broken JSON for the newsletter (caught by *Check AI answer*, Groq took over). Result: 13 rows, correct IDs, demo-mode schedule, SEO/quality scores, Telegram text, 22 log events (`ai_fallback` ×2 with reasons).
-  * **One job dead on both providers + bad AI content**: newsletter skipped and reported ("Not generated: Newsletter"); a caption containing "real gold", "₹2,999", "20%" and the discount code was scored 60 with 4 `FACT:` issues. Captions wrapped in ```` ```json ```` fences were parsed fine.
-  * **Everything down**: the run stops with "Every AI job failed…" listing each job's reason.
-  * Request check: Gemini got JSON mode + schema + `?key=` from the credential + `thinkingConfig`; Groq got JSON mode + `Bearer` header; the repurpose prompt contained the blog from round 1.
-  * Ran under both n8n expression engines (`vm`, the 1.123 default, and `legacy`).
-* **Not verified here** (no real accounts in this environment): live calls to Google Sheets, Gemini, Groq and Telegram. Your first real run is the live test (steps below).
+1. **Lanes 4 and 5 (and 2) could email the same lead seconds apart.** The gap rule only sees emails already written to the row, but Lane 2 (:00), Lane 4 (:15) and Lane 5 (:30) runs overlap. Fix: Lanes 5 and 2 (newsletter) leave a lead to Lane 4 while its nurture email is due within the next minute (`reservedForNurture`, SPEC 5.3), and Lane 4 re-reads the row before sending (fix 2). Proven: the end-to-end storyline run against the pre-fix lanes delivered a launch email and a nurture email to `lead04` in the same second; with the fix, nobody gets two emails inside `MIN_EMAIL_GAP_DAYS`.
+2. **A reply recorded by Lane 7 during a Lane 4/6 run was ignored and then overwritten.** Lanes 4 and 6 picked their rows at the start of a run (up to 45 s / 100 s earlier); a lead who replied "stop" meanwhile still got the next email, and the row update (`nurturing` / `contacted`) overwrote Lane 7's `unsubscribed` / `interested`. Fix: `Re-read LEADS/PROSPECTS` → `Check … is still due` → `Still due?` right before the safety gate; if the row changed, nothing is sent or written (SPEC 5.4).
+3. **Demo replies from the shared address.** The Gmail API always sends the demo reply FROM `kayademo.customers@gmail.com` (never a plus-address), which matches no single row, so a reply only matches through its Gmail thread. Fixes in Lane 7's demo form: `Reply to Sender Only` (n8n otherwise also copies the reply back to the plus-address), the address must belong to a lead/prospect, and the mail it answers must have been sent to exactly that address and have a thread id. The end-to-end world reproduces Gmail's per-mailbox thread ids and `In-Reply-To` threading: the reply lands in the outreach thread and Lane 7 matches it by thread.
+4. **Credentials vanished on the editor's "Import from File".** With `"id": ""` (old SPEC 1 rule), n8n 1.123's editor deletes every credential reference whose id is unknown and only spares `id: null`: 0 of 83 linked. All files now use `"id": null`: 83/83 linked through the editor and the CLI. The validator rejects `""`.
+5. **Layout:** three Lane 2 node pairs overlapped (80 px apart), the Lane 7 demo-helper note half-covered two nodes, a Lane 6 node stuck out of its band. Fixed; the validator now checks overlaps.
+6. Lane 6 logged `sequence_completed` with channel `sheet` in one path; SPEC 5.6 says `email` (as Lane 4 does). Aligned.
 
-### Finding worth knowing
-n8n 1.123.84's new default expression engine (`vm`) fails on `$('Other node').first()` **inside node parameters** ("#<Object> could not be cloned"); the `legacy` engine and Code nodes are fine. Lane 1 therefore only uses `{{ $json.… }}` in parameters, and SPEC 5.12 makes that a rule for every lane. If you ever hit that error in your own workflows, either restructure the same way or start n8n with `N8N_EXPRESSION_ENGINE=legacy`.
+### 3. Every "Spec gaps" decision of PRs #2–#4, reviewed
 
-## Setup (owner, once)
+Kept unless noted. "Kept" means it does not conflict with SPEC or another lane.
 
-1. **Google accounts**: a Gmail for the sender (Kaya Jewels, e.g. `kayademo.hello@gmail.com`) and one for the demo customers (`kayademo.customers@gmail.com`). Every demo lead and prospect address is a plus-address of the customers inbox, so all demo mail lands somewhere you control.
-2. **Sheet**: create a Google Sheet named `Kaya Jewels · Diwali demo (Marion Enroute)` with 8 tabs named exactly `SETTINGS, BRIEF, CONTENT, LEADS, PROSPECTS, SEQUENCES, EVENTS_LOG, DASHBOARD`. For each tab: **File → Import → Upload** the matching CSV → **Replace current sheet** → **untick "Convert text to numbers, dates, and formulas"**. Copy the sheet id from the URL.
-3. **SETTINGS**: set `SENDER_EMAIL`, `TELEGRAM_OWNER_CHAT_ID`, `TELEGRAM_CHANNEL_ID`, `SHEET_URL` (with the real id), and check `LAUNCH_DATE`. Before a demo, set `DEMO_LAUNCH_AT` about 15 minutes ahead.
-4. **Telegram**: create a bot with @BotFather, press Start in its chat, create a channel and add the bot as admin.
-5. **n8n credentials**: create the 6 credentials with the exact names in SPEC section 1 (copy-paste them; the `·` is a middle dot).
-6. **Import Lane 1**: replace `__KAYA_SHEET_ID__` in the JSON with your sheet id (any text editor: find and replace), then Workflows → Import from File. Run it with **Execute workflow**.
+| PR | Decision | Verdict |
+|---|---|---|
+| #2.1 | Unpublishable rows stay `approved` with `last_error`, logged once | kept |
+| #2.2 | Update nodes get only the key + Lane 2's own columns | kept (end-to-end ownership check passes) |
+| #2.3 | Reel brief `publish_failed` uses channel `telegram_owner` | kept |
+| #2.4 | `approved → publishing` not logged | kept |
+| #2.5 | Newsletter `email_sent` meta `{content_id, thread_id}` | kept (Lane 8 counts it) |
+| #2.6 | Newsletter placeholders limited to SETTINGS-based ones; empty first name → "there" | kept (Lane 1 newsletters use only `first_name` + `unsubscribe_line`) |
+| #2.7 | Required fields per asset type | kept |
+| #2.8 | A blocked lead that is hot still pings the owner | kept |
+| #2.9 | Rejected form submissions log `error` with empty `entity_id` | kept |
+| #2.10 | Lane 3 Telegram failure never loses the lead | kept |
+| #2.11 | En dash in budget options | kept (as SPEC 7.3) |
+| #2.12 | No Gmail node in Lane 3 | kept |
+| #2.13–14 | `lane-src/` generator; docs in `docs/` | kept |
+| #3.1–2 | Nurture step = exactly `seq_step + 1`; no active step at all → one `error` | kept |
+| #3.3 | Failed launch email only logs `email_failed`; retried next run | kept |
+| #3.4 | Offer code never in channel posts | kept |
+| #3.5 | Bad row / bad template logs `error` every run until fixed | kept (visible in Lane 8 `errors_period`) |
+| #3.6–7 | Lane 8 AI numbers check; "period" definition | kept |
+| #3.8 | `handlingExtraData: ignoreIt` on updates | kept |
+| #3.9 | Lane 4 / Lane 5 overlap at launch | **fixed** (fix 1) |
+| #3.10 | Sheets update failing after a send → one resend possible | kept as a known limit (SPEC 5.4) |
+| #4.1 | Bad prospect rows pushed back 1 demo day | kept |
+| #4.2 | No further step → `sequence_done` + `sequence_completed` | kept (channel aligned to `email`, fix 6) |
+| #4.3 | Lane 7 reads EVENTS_LOG, `message_id` in meta, duplicates dropped | kept |
+| #4.4 | Matching never guesses; bare demo address unmatched | kept; demo replies now always in-thread (fix 3) |
+| #4.5 | Status guards (`do_not_contact`/`unsubscribed` sticky, `new` prospect replying moves on) | kept (matches the handoffs above) |
+| #4.6–7 | AI out-of-office treated like the header case; alert text without quotes | kept |
+| #4.8–12 | No `offer_code` in Lane 6; `ignoreIt`; shared Lane 7 first nodes; error channels; `email_blocked` only in the demo form | kept |
 
-## What sessions 2–5 must do
+### 4. One canvas
+`lanes/marion-marketing-engine.json`, workflow **"Marion Enroute · Marketing Engine demo (Kaya Jewels)"**: 256 nodes (238 working nodes, 18 sticky notes), each lane in its own horizontal band (Lane 1 at the top, SPEC 5.8), each band framed by a coloured note `Lane N · <name>` with what it does, and one overview note at the very top ("Marion Enroute — Marketing Engine demo" + the 5-step demo script). No connections cross lanes; one Manual Trigger (Lane 1). Screenshot: `docs/canvas.png`.
 
-Every session: read `SPEC.md` fully first (sections 2–5 are binding), copy the shared snippets from it (settings, time helpers, safety gate, event builder, AI pattern from Lane 1), keep inside your lane's canvas band, run `node tools/validate-workflow.mjs` on your file, and add your lane to `NODES.md` and this file.
+### 5. Tests (all on n8n 1.123.84, both expression engines)
 
-**Session 2: Lane 2 Publisher + Lane 3 Lead engine** (SPEC 7.2, 7.3)
-* `lanes/lane-2-publisher.json`: approved + due CONTENT → Telegram channel (captions, short posts, blog teaser) / owner chat (reel briefs); newsletter broadcast to active leads, resumable via `last_newsletter_id`.
-* `lanes/lane-3-lead-engine.json`: Form Trigger `kaya-waitlist` with the exact fields and option mapping, dedupe, rule-based score, safety gate, append LEADS (`status new`, `next_action_at now`), hot-lead Telegram alert. No email (Lane 4 sends the welcome).
-* Done when: the "done when" lines of 7.2 and 7.3 hold.
+See the table in the PR / `tests/README.md` for how to re-run. Results files: `tests/lane-N/RESULTS.md`, `tests/e2e/RESULTS.md`, `tests/IMPORT-CHECK.md`.
 
-**Session 3: Lane 4 Sequence sender + Lane 5 Launch engine + Lane 8 Report** (SPEC 7.4, 7.5, 7.8)
-* Lane 4: due leads → render WAITLIST_NURTURE step → gate → Gmail → update row immediately → log.
-* Lane 5: launch moment from the demo clock; latest due channel post; highest due email step to active leads via `launch_step`.
-* Lane 8: due check from EVENTS_LOG, metrics of SPEC 2.8, DASHBOARD append-or-update, Telegram report, optional AI insights.
+| Suite | `vm` (default) | `legacy` |
+|---|---|---|
+| Lane 2 · Publisher (`tests/lane-2`) | 110/110 | 110/110 |
+| Lane 2 · live Schedule Trigger (real cron) | 4/4 | – |
+| Lane 3 · Lead engine | 65/65 | 65/65 |
+| Lane 4 · Sequence sender | 112/112 | 112/112 |
+| Lane 5 · Launch engine | 96/96 | 96/96 |
+| Lane 6 · Outreach | 158/158 (20 scenarios) | 158/158 |
+| Lane 7 · Inbox | 159/159 (20 scenarios) | 159/159 |
+| Lane 8 · Report | 105/105 | 105/105 |
+| **End-to-end storyline on the canvas** (`tests/e2e`) | **60/60** (12 scenarios) | **60/60** |
+| Import: CLI, canvas + 8 lane files | 9/9 files, 83/83 canvas credential references linked, round trip identical | |
+| Import: editor *Import from File* + Save | 256 nodes, 83/83 linked | |
+| `tools/validate-workflow.mjs` | canvas + 8 lane files: valid, 0 warnings | |
 
-**Session 4: Lane 6 Outreach + Lane 7 Inbox** (SPEC 7.6, 7.7)
-* Lane 6: due prospects by fit score, AI opener (Gemini → Groq → template), outreach sequences, update immediately.
-* Lane 7: Gmail Trigger on the sender inbox, match by thread id then email, AI classification with keyword fallback, status mapping, hot/question alerts, mark read; optional demo reply form using the Demo Customers credential.
+Lane 1 has no automated suite of its own (session 1 tested it by hand); it runs inside the end-to-end storyline (13 rows, 5 AI calls, approval message, events). The storyline run against the **pre-fix** lanes failed the cross-lane gap check and the reply-addressing check (details in `tests/e2e/RESULTS.md`), so the storyline really catches the bugs fixed here.
 
-**Session 5: merge** (SPEC 8)
-* Build `workflow/kaya-demo-all-lanes.json`, run the validator on it, do the import test and the 20-minute demo dry run, finish `NODES.md` and this file.
+---
 
-## Open decisions
+## Decisions for you (the owner)
 
-1. **Launch date**: `LAUNCH_DATE = 2026-10-26` (10:00 IST, public launch 28 Oct) is a placeholder. Confirm or change it in SETTINGS only.
-2. **Gemini model and free tier**: default `gemini-2.5-flash` with `GEMINI_THINKING_BUDGET = 1024`. Google changes free-tier limits often; if Lane 1 keeps falling back to Groq, check AI Studio's rate-limit page and try `gemini-2.5-flash-lite`. Blank the thinking budget for models without thinking (e.g. `gemini-2.0-flash`).
-3. **Approval method**: approval happens in the sheet (`status` → `approved`). Telegram buttons would need a public webhook URL, which a home PC does not have. A tunnel (e.g. Cloudflare Tunnel) could add that later.
-4. **Blog publishing**: there is no real website, so Lane 2 posts a blog *teaser* to the Telegram channel; the full article stays in the sheet.
-5. **Reel ideas**: Lane 2 sends them to your private chat as shoot briefs (they are not public posts).
-6. **Session split** for lanes 2–8 (table at the top) is a suggestion.
-7. **Placeholder addresses**: `kayademo.hello@gmail.com` and `kayademo.customers@gmail.com` are examples. Use your real demo inboxes and update `SENDER_EMAIL` / `ALLOWED_DEMO_INBOXES`; the sample CSVs use the `kayademo.customers+…@gmail.com` pattern.
-8. **n8n version**: built and tested on 1.123.84; node versions in SPEC 5.13 were chosen to exist from about 1.80 onwards. If your n8n is older than ~1.80 and an import complains about a node version, tell the next session.
+1. **Hot leads still get the newsletter and the launch email.** SPEC 3.2 counts `hot` and `replied` as *active* leads for Lanes 2 and 5; only the automatic *nurture* sequence (Lane 4) stops for them. I kept that: a lead who said "interested" is exactly who should get the early-access code. If you prefer that a lead who replied gets **no** automated email at all, remove `'replied', 'hot'` from the `ACTIVE` list in `Lane 2 · Pick newsletter recipients` and `Lane 5 · Pick launch work` (one line each). Unsubscribed and blocked leads never get any email.
+2. **Launch date:** `LAUNCH_DATE = 2026-10-26` (10:00 IST) is still the placeholder from session 1. Change it in SETTINGS only.
+3. **Gemini model:** `gemini-2.5-flash` with `GEMINI_THINKING_BUDGET = 1024`. If Lane 1 keeps falling back to Groq, try `gemini-2.5-flash-lite`.
+4. **Approval happens in the sheet** (Telegram buttons would need a public URL). **Blog** = a teaser in the channel; **reel ideas** = briefs in your private chat (session 1 decisions, unchanged).
+
+## Known limits
+
+* **Sample-data backlog:** the sample LEADS start with 9 overdue nurture emails; Lane 4 sends 3 per minute, oldest first, so for the first ~3 minutes after activation a new sign-up waits its turn (SETUP part I step 4).
+* **Newsletter vs launch email:** Lane 2 (newsletter, starts :00) and Lane 5 (launch emails, starts :30) are guarded against each other only by the gap rule. If a newsletter broadcast is still sending when Lane 5 picks its leads in a minute where a launch email step is due, one lead can get both within seconds. Practical rule: don't schedule a newsletter for launch time. (Lane 4 is protected in both directions.)
+* **Act → update window:** if Google Sheets fails for a whole retry cycle right after a Gmail send, that row is not updated and the next run sends the same step again (SPEC 5.4; at most one repeat).
+* **Lane 7 and lost polls:** if a Lane 7 execution fails completely, the Gmail Trigger does not redeliver that poll's mails; they stay unread in the inbox for you to handle by hand.
+* **Google OAuth in Testing mode** expires sign-ins after 7 days (SETUP part D).
+* **Real triggers** (Schedule, Form, Gmail Trigger) were checked against n8n's node definitions and import cleanly; in the tests they are replaced by webhooks.
 
 ## Change log
 * **Session 1**: SPEC v1.0, sheet templates, Lane 1, NODES.md, PROGRESS.md, validator.
+* **Sessions 2–4**: Lanes 2–8 with generators, docs and per-lane test suites (PRs #2–#4).
+* **Session 5**: merge; cross-lane fixes 1–6 above (SPEC v1.1); `tools/build-canvas.mjs` + the one canvas; validator checks for overlaps, webhook ids, form paths and `"id": null`; `tests/e2e/` (end-to-end storyline, import checks through the CLI and the editor); SETUP.md; README, NODES.md and lane docs updated.

@@ -2,7 +2,7 @@
 // Validates an n8n workflow export against SPEC.md (structure + project rules).
 // Usage:
 //   node tools/validate-workflow.mjs lanes/lane-3-lead-engine.json      (one lane file)
-//   node tools/validate-workflow.mjs workflow/kaya-demo-all-lanes.json  (the merged canvas)
+//   node tools/validate-workflow.mjs lanes/marion-marketing-engine.json  (the merged canvas)
 // Exit code 0 = no errors (warnings allowed), 1 = errors found.
 import { readFileSync } from 'node:fs';
 
@@ -50,6 +50,9 @@ const TRIGGERS = ['manualTrigger', 'scheduleTrigger', 'formTrigger', 'gmailTrigg
 const TABS = ['SETTINGS', 'BRIEF', 'CONTENT', 'LEADS', 'PROSPECTS', 'SEQUENCES', 'EVENTS_LOG', 'DASHBOARD'];
 const SHEET_PLACEHOLDER = '__KAYA_SHEET_ID__';
 const NAME_RE = /^Lane ([1-8]) · \S.*$/;
+const CANVAS_RE = /^Canvas · \S.*$/;   // canvas-level sticky notes (the overview above Lane 1 in the merged file)
+const LANE_TITLES = { 1: 'Content engine', 2: 'Publisher', 3: 'Lead engine', 4: 'Sequence sender', 5: 'Launch engine', 6: 'Outreach', 7: 'Inbox', 8: 'Report' };
+const NODE_SIZE = 100; // n8n draws a node as a 100 x 100 box at its position
 const LANE_HEIGHT = 1200; // SPEC section 5.8: lane N lives in y = (N-1)*1200 ... (N-1)*1200 + 1000
 
 let wf;
@@ -118,6 +121,11 @@ for (const p of secretPatterns) if (p.test(raw)) err(`Looks like a real API key 
 const lanesSeen = new Set();
 let manualTriggers = 0;
 for (const n of nodes) {
+  if (n.type === 'n8n-nodes-base.stickyNote' && CANVAS_RE.test(n.name || '')) {
+    const bottom = (n.position?.[1] ?? 0) + Number(n.parameters?.height ?? 0);
+    if (bottom > 0) err(`"${n.name}": a canvas-level sticky note must sit above Lane 1 (bottom edge y <= 0, found ${bottom})`);
+    continue;
+  }
   const m = NAME_RE.exec(n.name || '');
   if (!m) err(`Node name "${n.name}" must look like "Lane N · Short action" (SPEC 5.1)`);
   const lane = m ? Number(m[1]) : null;
@@ -139,7 +147,8 @@ for (const n of nodes) {
     const allowed = CREDENTIALS[credType];
     if (!allowed) err(`"${n.name}": credential type ${credType} is not in SPEC section 1`);
     else if (!allowed.includes(cred?.name)) err(`"${n.name}": credential name "${cred?.name}" must be one of: ${allowed.join(', ')}`);
-    if (cred?.id) err(`"${n.name}": credential id must be empty ("") in repo files, found "${cred.id}"`);
+    // null, not "": n8n's editor import drops references whose id is "" (SPEC 1, session 5).
+    if (cred?.id !== null) err(`"${n.name}": credential id must be null in repo files ("" is dropped by the editor's Import from File), found ${JSON.stringify(cred?.id)}`);
   }
 
   const p = n.parameters || {};
@@ -173,6 +182,53 @@ for (const n of nodes) {
     if (typeof p.amount === 'number' && p.amount > 60) err(`"${n.name}": Wait of ${p.amount}s is longer than 60s (SPEC 5.5)`);
   }
 }
+// ---- uniqueness that matters once lanes share one canvas (SPEC 8.3)
+const seenWebhooks = new Map();
+const seenPaths = new Map();
+for (const n of nodes) {
+  if (n.webhookId) {
+    if (seenWebhooks.has(n.webhookId)) err(`Duplicate webhookId ${n.webhookId}: "${seenWebhooks.get(n.webhookId)}" and "${n.name}"`);
+    seenWebhooks.set(n.webhookId, n.name);
+  }
+  if (n.type === 'n8n-nodes-base.formTrigger') {
+    const path = n.parameters?.options?.path;
+    if (!path) err(`"${n.name}": Form Trigger needs options.path (SPEC 7.3 / 7.7)`);
+    else if (seenPaths.has(path)) err(`Duplicate form path "${path}": "${seenPaths.get(path)}" and "${n.name}"`);
+    else seenPaths.set(path, n.name);
+  }
+}
+
+// ---- layout: nothing overlaps (SPEC 5.8 / 8.5)
+const boxOf = (n) => {
+  const [x, y] = n.position || [0, 0];
+  if (n.type !== 'n8n-nodes-base.stickyNote') return { x1: x, y1: y, x2: x + NODE_SIZE, y2: y + NODE_SIZE };
+  return { x1: x, y1: y, x2: x + Number(n.parameters?.width ?? 240), y2: y + Number(n.parameters?.height ?? 160) };
+};
+const intersects = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
+const inside = (a, b) => a.x1 >= b.x1 && a.x2 <= b.x2 && a.y1 >= b.y1 && a.y2 <= b.y2;
+const isFrame = (n) => n.type === 'n8n-nodes-base.stickyNote' && Object.entries(LANE_TITLES).some(([lane, title]) => n.name === `Lane ${lane} · ${title}`);
+const working = nodes.filter((n) => n.type !== 'n8n-nodes-base.stickyNote');
+const notes = nodes.filter((n) => n.type === 'n8n-nodes-base.stickyNote' && !isFrame(n));
+const frames = nodes.filter(isFrame);
+for (let i = 0; i < working.length; i++) {
+  for (let j = i + 1; j < working.length; j++) {
+    if (intersects(boxOf(working[i]), boxOf(working[j]))) err(`"${working[i].name}" and "${working[j].name}" overlap on the canvas`);
+  }
+}
+for (const note of notes) {
+  // An explanatory note may sit in empty space or fully behind a group of nodes (as a sub-frame), never half over a node.
+  for (const n of working) if (intersects(boxOf(note), boxOf(n)) && !inside(boxOf(n), boxOf(note))) err(`Sticky note "${note.name}" partly covers "${n.name}"`);
+  for (const other of notes) if (other !== note && intersects(boxOf(note), boxOf(other))) err(`Sticky notes "${note.name}" and "${other.name}" overlap`);
+}
+for (let i = 0; i < frames.length; i++) for (let j = i + 1; j < frames.length; j++) if (intersects(boxOf(frames[i]), boxOf(frames[j]))) err(`Lane frames "${frames[i].name}" and "${frames[j].name}" overlap`);
+for (const frame of frames) {
+  const lane = NAME_RE.exec(frame.name)[1];
+  for (const n of nodes) {
+    if (n === frame || NAME_RE.exec(n.name || '')?.[1] !== lane) continue;
+    if (!inside(boxOf(n), boxOf(frame))) warn(`"${n.name}" sticks out of its lane frame "${frame.name}"`);
+  }
+}
+
 if (manualTriggers > 1) err(`Found ${manualTriggers} Manual Trigger nodes; n8n allows one per workflow (reserved for Lane 1)`);
 for (const lane of lanesSeen) {
   const laneNodes = nodes.filter((n) => NAME_RE.exec(n.name || '')?.[1] === String(lane));

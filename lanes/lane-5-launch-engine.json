@@ -1,0 +1,1566 @@
+{
+  "name": "Kaya Jewels demo · Lane 5 · Launch engine",
+  "nodes": [
+    {
+      "name": "Lane 5 · Launch engine",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "## 🚀 Lane 5 · Launch engine  ·  trigger: every minute (cron `30 * * * * *`)\n**What it does:** works out the launch moment (`DEMO_LAUNCH_AT` in demo mode, `LAUNCH_DATE` + `LAUNCH_TIME` otherwise), then runs the LAUNCH_BROADCAST steps as they fall due: posts the LATEST due channel step to the Telegram channel (older undone ones are marked done without posting) and sends the highest due email step to every active lead that has not had it yet (`launch_step`), up to `MAX_SENDS_PER_RUN` per run.\n**Tabs:** reads SETTINGS, SEQUENCES, LEADS, BRIEF · writes SEQUENCES (`broadcast_done_at`), LEADS (`launch_step, last_contacted_at, thread_ids, status/email_allowed when blocked, updated_at`) and EVENTS_LOG.\n**Credentials:** Kaya Demo · Google Sheets, Gmail Sender, Telegram Bot.  **Docs:** SPEC.md §7.5 · docs/lane-5.md explains every node.",
+        "height": 1000,
+        "width": 5200,
+        "color": 5
+      },
+      "id": "51242288-de24-573c-a96f-4b8c0032b6df",
+      "position": [
+        -240,
+        4800
+      ]
+    },
+    {
+      "name": "Lane 5 · How the loop works",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "### How one round works\n\"Pick launch work\" returns the channel post first (if one is due), then one item per lead to email. The loop handles one item at a time: post → Telegram, email → safety gate → Gmail. Every path meets in **Decide outcome**, which says what to write back (SEQUENCES for a post, LEADS for an email). The row is updated BEFORE the next item, so nothing is posted or sent twice.",
+        "height": 90,
+        "width": 1900,
+        "color": 7
+      },
+      "id": "a9d037d4-daae-5d26-a339-e1743879e1c9",
+      "position": [
+        1000,
+        5700
+      ]
+    },
+    {
+      "name": "Lane 5 · Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 * * * * *"
+            }
+          ]
+        }
+      },
+      "notes": "30 * * * * *",
+      "notesInFlow": true,
+      "id": "cb550998-f6c9-5934-a15b-a40c9fafcef9",
+      "position": [
+        0,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Read SETTINGS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SETTINGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of SETTINGS",
+      "notesInFlow": true,
+      "id": "0d3251f7-2bb5-5cb6-af87-4d4b36978bf9",
+      "position": [
+        220,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Settings to object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// SETTINGS arrives as one item per row (key | value | type | description).\n// Turn it into ONE item, e.g. { DEMO_MODE: 'TRUE', MAX_SENDS_PER_RUN: '3', ... },\n// so every later node can read settings with $('Lane 5 · Settings to object').first().json.KEY\nconst settings = {};\nfor (const item of $input.all()) {\n  const key = String(item.json.key ?? '').trim();\n  if (!key) continue;\n  const value = item.json.value;\n  settings[key] = typeof value === 'string' ? value.trim() : (value ?? '');\n}\n\n// Stop early with a clear message if the sheet is missing something this lane needs.\nconst required = [\"DEMO_MODE\",\"DEMO_MINUTES_PER_DAY\",\"LAUNCH_DATE\",\"LAUNCH_TIME\",\"EARLY_ACCESS_DAYS\",\"WAITLIST_FORM_URL\",\"SENDER_NAME\",\"SENDER_EMAIL\",\"ALLOWED_DEMO_INBOXES\",\"MAX_SENDS_PER_RUN\",\"SEND_DELAY_SECONDS\",\"MIN_EMAIL_GAP_DAYS\",\"UNSUBSCRIBE_LINE\",\"TELEGRAM_CHANNEL_ID\"];\nconst missing = required.filter((key) => settings[key] === undefined || settings[key] === '');\nif (missing.length) {\n  throw new Error(`The SETTINGS tab is missing a value for: ${missing.join(', ')}`);\n}\n\n// Derived values (SPEC section 5.3). Sheet booleans may come back as true or \"TRUE\".\nsettings.IS_DEMO = String(settings.DEMO_MODE).trim().toUpperCase() === 'TRUE';\nconst demoMinutes = Number(settings.DEMO_MINUTES_PER_DAY);\nif (settings.IS_DEMO && !(demoMinutes > 0)) {\n  throw new Error('DEMO_MINUTES_PER_DAY must be a number above 0 when DEMO_MODE is TRUE');\n}\nsettings.DAY_MS = settings.IS_DEMO ? demoMinutes * 60 * 1000 : 24 * 60 * 60 * 1000;\n\nreturn [{ json: settings }];"
+      },
+      "notes": "Rows → one settings item",
+      "notesInFlow": true,
+      "id": "edebe8f2-400e-5f83-aada-69c7d61e227f",
+      "position": [
+        440,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Read SEQUENCES",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SEQUENCES",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of SEQUENCES",
+      "notesInFlow": true,
+      "id": "4fcc2bf2-351e-5d09-a2bb-356cae70d3a6",
+      "position": [
+        660,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Read LEADS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of LEADS",
+      "notesInFlow": true,
+      "id": "d4c6b8d6-c5ca-5790-a283-a6e7c61205fb",
+      "position": [
+        880,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Read BRIEF",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BRIEF",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Reads every row of BRIEF",
+      "notesInFlow": true,
+      "id": "9de8c813-a653-5d19-a5ac-bd41dca06b10",
+      "position": [
+        1100,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Pick launch work",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Works out what the launch needs RIGHT NOW and prepares it (SPEC 7.5):\n//  - at most one channel post (the latest due step that is not done yet), plus the stale older steps to mark as done\n//  - up to MAX_SENDS_PER_RUN launch emails (the highest due email step) for active leads that have not got it yet\n// Output: one item per piece of work; nothing to do = no items = quiet end.\nconst S = $('Lane 5 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\n// ---- template renderer (SPEC 5.11)\nconst escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nfunction render(template, values) {\n  const missing = new Set();\n  const text = String(template ?? '').replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (token, key) => {\n    if (values[key] === undefined || values[key] === null || String(values[key]).trim() === '') { missing.add(key); return token; }\n    return String(values[key]);\n  });\n  return { text, missing: [...missing] };\n}\nconst now = $now.setZone(TZ);\nconst SEQUENCE_ID = 'LAUNCH_BROADCAST';\nconst out = [];\nconst problem = (message, extra = {}) => out.push({ json: { kind: 'skip', is_post: false, needs_email: false, pick_error: message, entity_type: 'sequence', entity_id: SEQUENCE_ID, ...extra } });\n\n// ---- when is the launch?\nconst T0 = launchAt(S);\nif (!T0) {\n  const demoBlank = S.IS_DEMO && String(S.DEMO_LAUNCH_AT ?? '').trim() === '';\n  if (demoBlank) return [];                                           // demo mode, no launch moment chosen: nothing to do, quietly\n  problem(S.IS_DEMO ? 'DEMO_LAUNCH_AT is not a valid timestamp' : 'LAUNCH_DATE / LAUNCH_TIME are not valid');\n  return out;\n}\n\n// ---- steps\nconst steps = [];\nfor (const row of rowsOf('Lane 5 · Read SEQUENCES')) {\n  if (String(row.sequence_id).trim() !== SEQUENCE_ID || !isTrue(row.active)) continue;\n  const step = Number(row.step);\n  const delay = Number(String(row.delay_days).trim() === '' ? NaN : row.delay_days);\n  const basis = String(row.delay_basis ?? '').trim();\n  if (!Number.isInteger(step) || step < 1 || !Number.isFinite(delay) || basis !== 'launch') {\n    problem(`step ${row.step_key || '?'} has an invalid step, delay_days or delay_basis (must be a number and \"launch\")`, { entity_id: row.step_key || SEQUENCE_ID });\n    continue;\n  }\n  steps.push({ ...row, step, due_at: addDays(T0, delay) });\n}\nconst due = steps.filter((row) => row.due_at.toMillis() <= now.toMillis());\nif (!due.length) return out;\n\n// ---- placeholders (BRIEF text may contain {{launch_date}} style tokens, so fill those first)\nconst realLaunch = parseDate(S.LAUNCH_DATE);\nconst dateText = (d) => (d ? d.setLocale('en').toFormat('cccc, d LLLL') : '');\nconst base = {\n  launch_date: dateText(realLaunch),\n  public_launch_date: dateText(realLaunch?.plus({ days: Number(S.EARLY_ACCESS_DAYS) })),\n  waitlist_form_url: S.WAITLIST_FORM_URL, sender_name: S.SENDER_NAME, unsubscribe_line: S.UNSUBSCRIBE_LINE,\n};\nconst brief = {};\nfor (const row of rowsOf('Lane 5 · Read BRIEF')) { const key = String(row.key ?? '').trim(); if (key) brief[key] = String(row.value ?? '').trim(); }\nconst briefValues = {};\nfor (const key of ['brand_name', 'brand_instagram', 'collection_name', 'founder_name', 'offer_percent', 'offer_code']) {\n  if (brief[key] !== undefined) briefValues[key] = render(brief[key], base).text;\n}\n// The discount code may only appear in the launch EMAIL, never in the public channel post.\nconst { offer_code: offerCode, ...briefPublic } = briefValues;\n\n// ---- channel post: only the latest undone due step is posted, older undone ones are marked done without posting\nconst undoneChannel = due\n  .filter((row) => String(row.channel).trim() === 'telegram_channel' && String(row.broadcast_done_at ?? '').trim() === '')\n  .sort((a, b) => a.due_at.toMillis() - b.due_at.toMillis() || a.step - b.step);\nif (undoneChannel.length) {\n  const latest = undoneChannel[undoneChannel.length - 1];\n  const stale = undoneChannel.slice(0, -1).map((row) => row.step_key);\n  const post = render(latest.body_template, Object.fromEntries(Object.entries({ ...base, ...briefPublic }).map(([k, v]) => [k, escapeHtml(v)])));\n  if (post.missing.length) problem(`channel post ${latest.step_key} has empty or unknown placeholder(s): ${post.missing.join(', ')}`, { entity_id: latest.step_key });\n  else out.push({ json: { kind: 'post', is_post: true, needs_email: false, chat_id: String(S.TELEGRAM_CHANNEL_ID), text: post.text.slice(0, 4000), step_key: latest.step_key, stale_keys: stale } });\n}\n\n// ---- emails: k = highest due email step; every active lead with launch_step < k gets exactly that step\nconst emailSteps = due.filter((row) => String(row.channel).trim() === 'email').sort((a, b) => a.step - b.step);\nif (emailSteps.length) {\n  const stepRow = emailSteps[emailSteps.length - 1];\n  const k = stepRow.step;\n  const ACTIVE = ['new', 'nurturing', 'nurture_done', 'replied', 'hot'];\n  // Cross-lane guard (session 5): Lane 4 reads LEADS at :15 and this lane at :30, and both runs can last ~45 s, so the\n  // gap rule alone cannot see an email the other lane is sending right now. A lead Lane 4 will email within the next\n  // minute (status new/nurturing, next_action_at blank or due by then) is left to Lane 4; once that email is in its\n  // row, the gap rule spaces the launch email. Lane 4 re-reads the row before sending, which covers the other direction.\n  const NURTURE_HORIZON_MS = 60 * 1000;\n  const reservedForNurture = (lead) => ['new', 'nurturing'].includes(String(lead.status ?? '').trim())\n    && (!parseTs(lead.next_action_at) || parseTs(lead.next_action_at).toMillis() <= now.toMillis() + NURTURE_HORIZON_MS);\n  const maxSends = Math.max(0, Number(S.MAX_SENDS_PER_RUN) || 0);\n  let sends = 0;\n  for (const lead of rowsOf('Lane 5 · Read LEADS')) {\n    if (sends >= maxSends) break;\n    if (!ACTIVE.includes(String(lead.status ?? '').trim())) continue;\n    if (!isTrue(lead.consent)) continue;\n    if (String(lead.email_allowed ?? '').trim().toUpperCase() === 'FALSE') continue;\n    const leadId = String(lead.lead_id ?? '').trim();\n    const email = String(lead.email ?? '').trim().toLowerCase();\n    const stepRaw = String(lead.launch_step ?? '').trim();\n    const launchStep = stepRaw === '' ? 0 : Number(stepRaw);\n    const bad = [];\n    if (!leadId) bad.push('lead_id');\n    if (!email) bad.push('email');\n    if (!Number.isInteger(launchStep) || launchStep < 0) bad.push('launch_step');\n    if (String(lead.last_contacted_at ?? '').trim() && !parseTs(lead.last_contacted_at)) bad.push('last_contacted_at');\n    if (launchStep < k || bad.length) {\n      if (bad.length) { problem(`missing or invalid ${bad.join(', ')}`, { entity_type: 'lead', entity_id: leadId || `row ${lead.row_number ?? '?'}` }); continue; }\n    } else continue;                                               // already has this (or a later) launch email\n    if (!gapOk(lead, now)) continue;                               // too soon after any other automated email\n    if (reservedForNurture(lead)) continue;                        // Lane 4 is about to email this lead\n    const common = { ...base, ...briefPublic, ...(offerCode !== undefined ? { offer_code: offerCode } : {}) };\n    const text = render(stepRow.subject_template, { ...common, first_name: lead.first_name, city: lead.city });\n    const html = render(stepRow.body_template, { ...common, first_name: escapeHtml(lead.first_name), city: escapeHtml(lead.city) });\n    const missingTokens = [...new Set([...text.missing, ...html.missing])];\n    if (missingTokens.length) { problem(`template ${stepRow.step_key} has empty or unknown placeholder(s): ${missingTokens.join(', ')}`, { entity_type: 'lead', entity_id: leadId }); continue; }\n    out.push({\n      json: {\n        kind: 'email', is_post: false, needs_email: true, lead_id: leadId, to_email: email,\n        subject: text.text.replace(/\\s+/g, ' ').trim(), html: html.text, sender_name: S.SENDER_NAME,\n        sequence_id: SEQUENCE_ID, step: k, step_key: stepRow.step_key,\n        status_from: String(lead.status).trim(), thread_ids_before: String(lead.thread_ids ?? ''),\n      },\n    });\n    sends++;\n  }\n}\nreturn out;\n"
+      },
+      "notes": "What is due right now?",
+      "notesInFlow": true,
+      "id": "1acdd4ef-9710-5f32-ad71-83e501698bf4",
+      "position": [
+        1320,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Loop over work items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "notes": "One post or email per round",
+      "notesInFlow": true,
+      "id": "9770296c-78fc-50df-a8c6-dd9705b269bc",
+      "position": [
+        1540,
+        5200
+      ]
+    },
+    {
+      "name": "Lane 5 · Is channel post?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ec3c2520-46bd-5b5a-a14f-80fc1c9cf5df",
+              "leftValue": "={{ $json.is_post }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "true = Telegram post",
+      "notesInFlow": true,
+      "id": "f808310e-feba-5c95-adc6-443f1b118230",
+      "position": [
+        1760,
+        5360
+      ]
+    },
+    {
+      "name": "Lane 5 · Post to channel",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "webhookId": "9f12924d-cddd-5eb2-ab0c-ab0291deee49",
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Kaya Demo · Telegram Bot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "notes": "To TELEGRAM_CHANNEL_ID",
+      "notesInFlow": true,
+      "id": "c4236b20-8ac0-504b-ac26-ec64ae06669a",
+      "position": [
+        2640,
+        5180
+      ]
+    },
+    {
+      "name": "Lane 5 · Needs email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5f6ef966-4e18-5dc3-a973-5437cc79b1f2",
+              "leftValue": "={{ $json.needs_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "false = nothing to send",
+      "notesInFlow": true,
+      "id": "689bb16d-c8ff-50ce-ac3d-a58777d844b9",
+      "position": [
+        1980,
+        5500
+      ]
+    },
+    {
+      "name": "Lane 5 · Demo safety gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Lane 5 · Demo safety gate: input items carry the recipient in `to_email`.\nconst S = $('Lane 5 · Settings to object').first().json;\nconst PUBLIC = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.in', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'rediffmail.com', 'proton.me', 'protonmail.com'];\nconst list = (value) => String(value ?? '').toLowerCase().split(',').map((part) => part.trim()).filter(Boolean);\nfunction checkRecipient(email) {\n  const match = /^([a-z0-9._%-]+)(\\+[a-z0-9._%-]*)?@([a-z0-9.-]+\\.[a-z]{2,})$/.exec(email);\n  if (!match) return { ok: false, reason: 'not a single valid email address' };\n  const base = `${match[1]}@${match[3]}`;                      // plus-tag removed\n  const inboxes = [...list(S.ALLOWED_DEMO_INBOXES), ...list(S.SENDER_EMAIL)];\n  const domains = list(S.ALLOWED_EMAIL_DOMAINS).map((d) => d.replace(/^@/, '')).filter((d) => !PUBLIC.includes(d));\n  if (inboxes.includes(base)) return { ok: true, reason: 'demo inbox' };\n  if (domains.includes(match[3])) return { ok: true, reason: 'demo domain' };\n  return { ok: false, reason: 'not in ALLOWED_DEMO_INBOXES or ALLOWED_EMAIL_DOMAINS' };\n}\nreturn $input.all().map((item) => {\n  const to = String(item.json.to_email ?? '').trim().toLowerCase();\n  const check = checkRecipient(to);\n  return { json: { ...item.json, safe_to: check.ok ? to : '', gate_ok: check.ok, gate_reason: check.reason } };\n});\n"
+      },
+      "notes": "Is the address allowed?",
+      "notesInFlow": true,
+      "id": "af73d7b4-6779-5f1d-a888-26a442080e1a",
+      "position": [
+        2200,
+        5440
+      ]
+    },
+    {
+      "name": "Lane 5 · Recipient allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0eca25f8-e444-5f4d-ae96-4dd53d1ca41c",
+              "leftValue": "={{ $json.gate_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "true = may send",
+      "notesInFlow": true,
+      "id": "0d6563e3-69f3-51d3-aca7-8f62efc8df76",
+      "position": [
+        2420,
+        5440
+      ]
+    },
+    {
+      "name": "Lane 5 · Send launch email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.safe_to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "={{ $json.sender_name }}"
+        }
+      },
+      "webhookId": "349026e5-0390-5946-a549-771bb478e8e6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": null,
+          "name": "Kaya Demo · Gmail Sender"
+        }
+      },
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "notes": "Sends one email",
+      "notesInFlow": true,
+      "id": "8075166c-37c1-5416-ac7f-24c9dc06c5be",
+      "position": [
+        2640,
+        5380
+      ]
+    },
+    {
+      "name": "Lane 5 · Decide outcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Runs once per work item, after its post/email step has finished one way or another.\n// Decides what to write back (SEQUENCES for a post, LEADS for an email) and which events to log.\nconst S = $('Lane 5 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\nconst now = $now.setZone(TZ);\nconst input = $json;\n// Every work item passes through \"Is channel post?\", so this is the item of this round whatever path it took.\nconst ctx = $('Lane 5 · Is channel post?').item.json;\nconst stamp = (d) => d.toFormat(STAMP);\nconst events = [];\nlet target = 'none';\nlet updates = [];\nlet outcome = ctx.kind;\n\nif (ctx.kind === 'post') {\n  const messageId = input.ok === true ? input.result?.message_id : undefined;\n  if (messageId !== undefined && messageId !== null) {\n    target = 'sequence'; outcome = 'posted';\n    updates = [ctx.step_key, ...(ctx.stale_keys || [])].map((key) => ({ step_key: key, broadcast_done_at: stamp(now) }));\n    events.push({ event_type: 'launch_post_published', entity_type: 'sequence', entity_id: ctx.step_key, channel: 'telegram_channel',\n      detail: `${ctx.step_key} posted to the channel${ctx.stale_keys?.length ? `; ${ctx.stale_keys.length} older step(s) skipped as stale` : ''}`,\n      meta: { step_key: ctx.step_key, message_id: messageId, stale_skipped: ctx.stale_keys || [] } });\n  } else {\n    // Leave broadcast_done_at blank so the next run tries again.\n    outcome = 'post_failed';\n    const message = typeof input.error === 'string' ? input.error : (input.error?.message || input.description || 'Telegram returned no message id');\n    events.push({ event_type: 'error', entity_type: 'sequence', entity_id: ctx.step_key, channel: 'telegram_channel',\n      detail: `channel post ${ctx.step_key} failed: ${message}`, meta: { node: 'Lane 5 · Post to channel', message: String(message).slice(0, 300) } });\n  }\n} else if (ctx.kind === 'email') {\n  const id = ctx.lead_id;\n  if (input.gate_ok === false) {\n    outcome = 'blocked'; target = 'lead';\n    updates = [{ lead_id: id, status: 'blocked', email_allowed: 'FALSE', updated_at: stamp(now) }];\n    events.push({ event_type: 'email_blocked', entity_type: 'lead', entity_id: id, status_from: ctx.status_from, status_to: 'blocked', channel: 'email',\n      detail: `${ctx.to_email} blocked by the safety gate: ${input.gate_reason}`, meta: { reason: input.gate_reason } });\n  } else if (input.id && !input.error) {\n    outcome = 'sent'; target = 'lead';\n    const threads = String(ctx.thread_ids_before || '').split(',').map((t) => t.trim()).filter(Boolean);\n    if (input.threadId) threads.push(String(input.threadId));\n    updates = [{ lead_id: id, launch_step: ctx.step, last_contacted_at: stamp(now), thread_ids: threads.slice(-10).join(','), updated_at: stamp(now) }];\n    events.push({ event_type: 'email_sent', entity_type: 'lead', entity_id: id, channel: 'email', detail: `${ctx.sequence_id} step ${ctx.step} sent`,\n      meta: { sequence_id: ctx.sequence_id, step: ctx.step, thread_id: String(input.threadId ?? '') } });\n  } else {\n    // The lead keeps launch_step, so the next run simply tries again.\n    outcome = 'email_failed';\n    const message = typeof input.error === 'string' ? input.error : (input.error?.message || JSON.stringify(input.error ?? 'Gmail returned no message id'));\n    events.push({ event_type: 'email_failed', entity_type: 'lead', entity_id: id, channel: 'email',\n      detail: `${ctx.sequence_id} step ${ctx.step} not sent: ${message}`, meta: { sequence_id: ctx.sequence_id, step: ctx.step, error: String(message).slice(0, 300) } });\n  }\n} else {\n  events.push({ event_type: 'error', entity_type: ctx.entity_type || 'sequence', entity_id: ctx.entity_id || '', channel: 'sheet',\n    detail: ctx.pick_error, meta: { node: 'Lane 5 · Pick launch work', message: ctx.pick_error } });\n}\nreturn { json: { outcome, target, update_sequence: target === 'sequence', update_lead: target === 'lead', updates, events } };\n"
+      },
+      "notes": "All paths meet here",
+      "notesInFlow": true,
+      "id": "d5f0f844-91c5-58c9-ab83-db16a5bd11fe",
+      "position": [
+        2900,
+        5400
+      ]
+    },
+    {
+      "name": "Lane 5 · Update a step?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "80168086-e48f-5eb9-a96e-965372c0ed12",
+              "leftValue": "={{ $json.update_sequence }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "true = a channel post",
+      "notesInFlow": true,
+      "id": "706841d3-84d7-5917-a9ee-8dad02486eb3",
+      "position": [
+        3120,
+        5400
+      ]
+    },
+    {
+      "name": "Lane 5 · Prepare step updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// One SEQUENCES update per step: ONLY step_key + broadcast_done_at (SPEC 5.4).\nreturn $input.all().flatMap((item) => item.json.updates.map((u) => ({ json: u })));\n"
+      },
+      "notes": "Only broadcast_done_at",
+      "notesInFlow": true,
+      "id": "c2100676-3a00-538b-afb0-954ab71047d4",
+      "position": [
+        3340,
+        5260
+      ]
+    },
+    {
+      "name": "Lane 5 · Update SEQUENCES step",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SEQUENCES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "step_key"
+          ],
+          "schema": [
+            {
+              "id": "step_key",
+              "displayName": "step_key",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sequence_id",
+              "displayName": "sequence_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delay_days",
+              "displayName": "delay_days",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delay_basis",
+              "displayName": "delay_basis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject_template",
+              "displayName": "subject_template",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body_template",
+              "displayName": "body_template",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_personalize",
+              "displayName": "ai_personalize",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "broadcast_done_at",
+              "displayName": "broadcast_done_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Right after the post",
+      "notesInFlow": true,
+      "id": "4ef09850-65f4-5175-a53a-281c62a856a8",
+      "position": [
+        3560,
+        5260
+      ]
+    },
+    {
+      "name": "Lane 5 · Update a lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "81fe1141-35aa-5fd9-ab4f-d9a802f47f2e",
+              "leftValue": "={{ $json.update_lead }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "false = nothing to write",
+      "notesInFlow": true,
+      "id": "4406c05f-6a99-59f1-a4b4-6ce96db00e95",
+      "position": [
+        3340,
+        5540
+      ]
+    },
+    {
+      "name": "Lane 5 · Prepare lead update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// ONLY the key column and the LEADS columns Lane 5 owns (SPEC 5.4).\nreturn $input.all().flatMap((item) => item.json.updates.map((u) => ({ json: u })));\n"
+      },
+      "notes": "Only owned columns",
+      "notesInFlow": true,
+      "id": "a0eb3451-bbe8-5b56-a6d8-52332e3e50bf",
+      "position": [
+        3560,
+        5540
+      ]
+    },
+    {
+      "name": "Lane 5 · Update LEAD row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_handle",
+              "displayName": "instagram_handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interest",
+              "displayName": "interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "occasion",
+              "displayName": "occasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_allowed",
+              "displayName": "email_allowed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment",
+              "displayName": "segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score_reason",
+              "displayName": "score_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sequence_id",
+              "displayName": "sequence_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seq_step",
+              "displayName": "seq_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "next_action_at",
+              "displayName": "next_action_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_contacted_at",
+              "displayName": "last_contacted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "launch_step",
+              "displayName": "launch_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_newsletter_id",
+              "displayName": "last_newsletter_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_ids",
+              "displayName": "thread_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reply_at",
+              "displayName": "last_reply_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply_class",
+              "displayName": "reply_class",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Right after the send",
+      "notesInFlow": true,
+      "id": "94290835-016b-5cd0-a8f1-e8046152f830",
+      "position": [
+        3780,
+        5540
+      ]
+    },
+    {
+      "name": "Lane 5 · Build log events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the outcome(s) of this loop round into EVENTS_LOG rows (SPEC 5.6).\nconst S = $('Lane 5 · Settings to object').first().json;\nconst TZ = 'Asia/Kolkata';\n// ---- event builder (SPEC 5.6)\nconst now = $now.setZone(TZ);\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 5,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst rows = [];\nconst seen = new Set();\n$input.all().forEach((item, index) => {\n  const decided = $('Lane 5 · Decide outcome').itemMatching(index).json;\n  const key = JSON.stringify(decided.events);\n  if (seen.has(key)) return;                                       // two SEQUENCES rows were updated for one post: log it once\n  seen.add(key);\n  for (const e of decided.events) rows.push({ json: event(e) });\n});\nreturn rows;\n"
+      },
+      "notes": "One row per action",
+      "notesInFlow": true,
+      "id": "ee873592-c9ea-54de-a15f-feda03554780",
+      "position": [
+        4000,
+        5400
+      ]
+    },
+    {
+      "name": "Lane 5 · Save to EVENTS_LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true,
+      "id": "5eac7d14-60d4-5623-ad93-bcb9009b90df",
+      "position": [
+        4220,
+        5400
+      ]
+    },
+    {
+      "name": "Lane 5 · Prepare pause",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Pause between two emails (SEND_DELAY_SECONDS). Only after an attempt to send; nothing else needs a pause.\nconst S = $('Lane 5 · Settings to object').first().json;\nconst attempted = $input.all().some((item) => ['email_sent', 'email_failed'].includes(item.json.event_type));\nreturn [{ json: { pause_seconds: attempted ? Math.min(60, Math.max(0, Number(S.SEND_DELAY_SECONDS) || 0)) : 0 } }];\n"
+      },
+      "notes": "SEND_DELAY_SECONDS",
+      "notesInFlow": true,
+      "id": "6b4a46fe-cbed-52f9-a789-4e2fc837feb1",
+      "position": [
+        4440,
+        5400
+      ]
+    },
+    {
+      "name": "Lane 5 · Pause between sends",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "parameters": {
+        "amount": "={{ $json.pause_seconds }}",
+        "unit": "seconds"
+      },
+      "webhookId": "20aae0fb-c4d5-509c-ae8d-f0e82df5347b",
+      "notes": "Then next item",
+      "notesInFlow": true,
+      "id": "054b96fc-99d7-5cee-a355-50dd09dbd3e5",
+      "position": [
+        4660,
+        5400
+      ]
+    }
+  ],
+  "connections": {
+    "Lane 5 · Every minute": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Read SETTINGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Read SETTINGS": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Settings to object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Settings to object": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Read SEQUENCES",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Read SEQUENCES": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Read LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Read LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Read BRIEF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Read BRIEF": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Pick launch work",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Pick launch work": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Loop over work items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Loop over work items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Lane 5 · Is channel post?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Is channel post?": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Post to channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Needs email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Post to channel": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Needs email?": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Demo safety gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Demo safety gate": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Recipient allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Recipient allowed?": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Send launch email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Send launch email": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Decide outcome": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Update a step?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Update a step?": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Prepare step updates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Update a lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Prepare step updates": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Update SEQUENCES step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Update SEQUENCES step": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Update a lead?": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Prepare lead update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 5 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Prepare lead update": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Update LEAD row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Update LEAD row": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Build log events": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Save to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Save to EVENTS_LOG": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Prepare pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Prepare pause": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Pause between sends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 5 · Pause between sends": {
+      "main": [
+        [
+          {
+            "node": "Lane 5 · Loop over work items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
