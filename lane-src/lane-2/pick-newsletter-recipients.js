@@ -24,7 +24,13 @@ const isActive = (lead) => ACTIVE.includes(clean(lead.status).toLowerCase())
 const leads = $input.all().map((item) => item.json).filter((lead) => clean(lead?.lead_id) !== '');
 const already = leads.filter((lead) => clean(lead.last_newsletter_id) === letter.content_id);
 const waiting = leads.filter((lead) => isActive(lead) && clean(lead.last_newsletter_id) !== letter.content_id);
-const ready = waiting.filter((lead) => gapOk(lead, now));                                // gap rule (SPEC 5.3)
+// Cross-lane guard (session 5): Lane 4 reads LEADS at :15 while this run (started at :00) may still be sending, so the gap
+// rule alone cannot see a nurture email Lane 4 is about to send. A lead Lane 4 will email within the next minute
+// (status new/nurturing, next_action_at blank or due by then) is left to Lane 4; it gets the newsletter on a later run.
+const NURTURE_HORIZON_MS = 60 * 1000;
+const reservedForNurture = (lead) => ['new', 'nurturing'].includes(clean(lead.status).toLowerCase())
+  && (!parseTs(lead.next_action_at) || parseTs(lead.next_action_at).toMillis() <= now.toMillis() + NURTURE_HORIZON_MS);
+const ready = waiting.filter((lead) => gapOk(lead, now) && !reservedForNurture(lead));    // gap rule (SPEC 5.3) + guard
 const chosen = ready.slice(0, Number(S.MAX_SENDS_PER_RUN));
 
 const launch = parseDate(S.LAUNCH_DATE);

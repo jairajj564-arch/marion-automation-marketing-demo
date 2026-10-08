@@ -75,7 +75,7 @@ export function buildTestWorkflow(lane, wf, { mockUrl, id, webhookPaths }) {
           nodes.push(httpNode(node, node.name, { method: 'POST', url: `${mockUrl}/gmail/send`, sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify({ to: ${expr(p.sendTo)}, subject: ${expr(p.subject)}, html: ${expr(p.message)}, sender_name: ${expr(p.options.senderName)} }) }}` }));
         } else if (op === 'reply') {
           expectParam(node, 'messageId', '={{ $json.message_id }}');
-          nodes.push(httpNode(node, node.name, { method: 'POST', url: `${mockUrl}/gmail/reply`, sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify({ message_id: ${expr(p.messageId)}, html: ${expr(p.message)}, thread_id: $json.thread_id, to: $json.safe_to }) }}` }));
+          nodes.push(httpNode(node, node.name, { method: 'POST', url: `${mockUrl}/gmail/reply`, sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify({ message_id: ${expr(p.messageId)}, html: ${expr(p.message)}, thread_id: $json.thread_id, to: $json.safe_to, reply_to_sender_only: ${JSON.stringify(p.options?.replyToSenderOnly === true)} }) }}` }));
         } else if (op === 'markAsRead') {
           expectParam(node, 'messageId', '={{ $json.message_id }}');
           nodes.push(httpNode(node, node.name, { method: 'POST', url: `${mockUrl}/gmail/markread`, sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify({ message_id: ${expr(p.messageId)} }) }}` }));

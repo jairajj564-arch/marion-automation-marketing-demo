@@ -273,6 +273,29 @@ await T.scenario('SETTINGS missing a required key: clear error, nothing sent', a
   T.check('stored error message names the key', /missing a value for: MAX_SENDS_PER_RUN/.test(await n8n.lastExecutionText()));
 });
 
+await T.scenario('Cross-lane guard (session 5): a lead Lane 7 marks hot/unsubscribed during the run is not emailed and its status is kept', async () => {
+  fresh([lead({ lead_id: 'LD-X1' }), lead({ lead_id: 'LD-X2' }), lead({ lead_id: 'LD-X3' })]);
+  // After the pick (1st LEADS read), Lane 7 changes two leads before Lane 4 gets to them.
+  mock.onRead = (tab, n, m) => { if (tab === 'LEADS' && n === 1) { m.find('LEADS', 'LD-X2').status = 'hot'; m.find('LEADS', 'LD-X3').status = 'unsubscribed'; } };
+  const r = await run();
+  T.eq('run finished OK', r.status, 200);
+  T.eq('only the unchanged lead was emailed', mock.sent.map((x) => x.to), ['kayademo.customers+t01@gmail.com']);
+  T.eq('Lane 7 statuses survive (not overwritten by nurturing)', [L('LD-X2').status, L('LD-X3').status], ['hot', 'unsubscribed']);
+  T.eq('their seq_step is untouched', [L('LD-X2').seq_step, L('LD-X3').seq_step], ['0', '0']);
+  T.eq('nothing logged for them', evs().filter((e) => e.entity_id !== 'LD-X1').length, 0);
+  T.check('the lead row was re-read before each send', mock.reads.filter((t) => t === 'LEADS').length === 4, mock.reads.join(','));
+});
+
+await T.scenario('Cross-lane guard (session 5): a lead Lane 5 emailed moments ago (after the pick) waits for the gap', async () => {
+  fresh([lead({ lead_id: 'LD-G1' })]);
+  mock.onRead = (tab, n, m) => { if (tab === 'LEADS' && n === 1) m.find('LEADS', 'LD-G1').last_contacted_at = ist(0); };
+  await run();
+  T.eq('no nurture email right after the launch email', mock.sent.length, 0);
+  T.eq('row untouched (seq_step 0, status new)', [L('LD-G1').seq_step, L('LD-G1').status], ['0', 'new']);
+  mock.onRead = null; mock.shiftTime(1.1); await run();
+  T.eq('after the gap (0.5 day = 1 demo minute) the welcome goes out', mock.sent.length, 1);
+});
+
 await T.scenario('Two runs executed back to back never double-send (with several leads)', async () => {
   fresh([lead(), lead(), lead(), lead()]);
   await run(); await run();

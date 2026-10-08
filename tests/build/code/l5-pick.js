@@ -70,6 +70,13 @@ if (emailSteps.length) {
   const stepRow = emailSteps[emailSteps.length - 1];
   const k = stepRow.step;
   const ACTIVE = ['new', 'nurturing', 'nurture_done', 'replied', 'hot'];
+  // Cross-lane guard (session 5): Lane 4 reads LEADS at :15 and this lane at :30, and both runs can last ~45 s, so the
+  // gap rule alone cannot see an email the other lane is sending right now. A lead Lane 4 will email within the next
+  // minute (status new/nurturing, next_action_at blank or due by then) is left to Lane 4; once that email is in its
+  // row, the gap rule spaces the launch email. Lane 4 re-reads the row before sending, which covers the other direction.
+  const NURTURE_HORIZON_MS = 60 * 1000;
+  const reservedForNurture = (lead) => ['new', 'nurturing'].includes(String(lead.status ?? '').trim())
+    && (!parseTs(lead.next_action_at) || parseTs(lead.next_action_at).toMillis() <= now.toMillis() + NURTURE_HORIZON_MS);
   const maxSends = Math.max(0, Number(S.MAX_SENDS_PER_RUN) || 0);
   let sends = 0;
   for (const lead of rowsOf('Lane LANE_N · Read LEADS')) {
@@ -90,6 +97,7 @@ if (emailSteps.length) {
       if (bad.length) { problem(`missing or invalid ${bad.join(', ')}`, { entity_type: 'lead', entity_id: leadId || `row ${lead.row_number ?? '?'}` }); continue; }
     } else continue;                                               // already has this (or a later) launch email
     if (!gapOk(lead, now)) continue;                               // too soon after any other automated email
+    if (reservedForNurture(lead)) continue;                        // Lane 4 is about to email this lead
     const common = { ...base, ...briefPublic, ...(offerCode !== undefined ? { offer_code: offerCode } : {}) };
     const text = render(stepRow.subject_template, { ...common, first_name: lead.first_name, city: lead.city });
     const html = render(stepRow.body_template, { ...common, first_name: escapeHtml(lead.first_name), city: escapeHtml(lead.city) });

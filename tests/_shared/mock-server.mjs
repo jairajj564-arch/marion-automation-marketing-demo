@@ -55,6 +55,7 @@ export function startMock(port) {
     owned: {},                                               // tab -> allowed columns for updates (violations are recorded)
     sheetFailWhen: [],                                       // e.g. [{ tab: 'EVENTS_LOG', op: 'append', field: 'entity_id', value: 'PR-I01' }] = every such write answers HTTP 500
     sheetFail: {},                                           // e.g. { 'EVENTS_LOG:append': [2] } = the 2nd append to EVENTS_LOG answers HTTP 500
+    afterRead: [],                                           // e.g. [{ tab: 'PROSPECTS', nth: 1, id: 'PR-B02', set: { status: 'interested' } }] = another lane changes a row right AFTER that read
   });
   config = defaultConfig();
   const violations = [];
@@ -142,7 +143,14 @@ export function startMock(port) {
       if (!table) return send(res, 404, { error: `unknown tab ${tab}` });
       if (req.method === 'GET') {
         record('sheet_read', { tab });
-        return send(res, 200, table.rows.map((row, i) => ({ ...stringify(row), row_number: i + 2 })));
+        const rows = table.rows.map((row, i) => ({ ...stringify(row), row_number: i + 2 }));
+        const nth = calls.filter((c) => c.kind === 'sheet_read' && c.tab === tab).length;
+        for (const rule of config.afterRead || []) {
+          if (rule.tab !== tab || rule.nth !== nth) continue;
+          const target = table.rows.find((r) => String(r[KEYS[tab]]) === String(rule.id));
+          if (target) Object.assign(target, rule.set);
+        }
+        return send(res, 200, rows);
       }
       if (parts[2] === 'update' || parts[2] === 'append') {
         const counterKey = `${tab}:${parts[2]}`;

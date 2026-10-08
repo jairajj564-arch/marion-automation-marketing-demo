@@ -6,9 +6,9 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "parameters": {
-        "content": "## 📬 Lane 4 · Sequence sender  ·  trigger: every minute (cron `15 * * * * *`)\n**What it does:** finds waitlist leads whose next nurture email is due (status `new`/`nurturing`, consent TRUE, gap respected), renders the WAITLIST_NURTURE step, passes it through the demo safety gate, sends it with Gmail, **updates the lead row straight away**, then logs it. At most `MAX_SENDS_PER_RUN` emails per run; a reply or unsubscribe (Lane 7 changes the status) stops the sequence by itself.\n**Tabs:** reads SETTINGS, LEADS, SEQUENCES, BRIEF · writes LEADS (`status, seq_step, next_action_at, last_contacted_at, thread_ids, email_allowed, updated_at`) and EVENTS_LOG.\n**Credentials:** Kaya Demo · Google Sheets, Kaya Demo · Gmail Sender.  **Docs:** SPEC.md §7.4 · docs/lane-4.md explains every node.",
+        "content": "## 📬 Lane 4 · Sequence sender  ·  trigger: every minute (cron `15 * * * * *`)\n**What it does:** finds waitlist leads whose next nurture email is due (status `new`/`nurturing`, consent TRUE, gap respected), renders the WAITLIST_NURTURE step, passes it through the demo safety gate, sends it with Gmail, **updates the lead row straight away**, then logs it. Right before sending it re-reads the lead, so a status Lane 7 changed or an email Lane 2/5 just sent is respected. At most `MAX_SENDS_PER_RUN` emails per run; a reply or unsubscribe (Lane 7 changes the status) stops the sequence by itself.\n**Tabs:** reads SETTINGS, LEADS, SEQUENCES, BRIEF · writes LEADS (`status, seq_step, next_action_at, last_contacted_at, thread_ids, email_allowed, updated_at`) and EVENTS_LOG.\n**Credentials:** Kaya Demo · Google Sheets, Kaya Demo · Gmail Sender.  **Docs:** SPEC.md §7.4 · docs/lane-4.md explains every node.",
         "height": 1000,
-        "width": 5200,
+        "width": 5400,
         "color": 4
       },
       "id": "738f9434-0064-59e1-ad34-870a6f60276f",
@@ -22,7 +22,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "parameters": {
-        "content": "### How one round works\nPick due leads gives ONE item per lead. For each lead the loop runs: needs an email? → safety gate → allowed? → Gmail → **Decide outcome** (every path meets here) → update the lead → log → pause → next lead.\nThe lead row is updated BEFORE the next lead is touched, so a crash can never send the same step twice.",
+        "content": "### How one round works\nPick due leads gives ONE item per lead. For each lead the loop runs: needs an email? → re-read the lead (still due?) → safety gate → allowed? → Gmail → **Decide outcome** (every path meets here) → update the lead → log → pause → next lead.\nThe lead row is updated BEFORE the next lead is touched, so a crash can never send the same step twice.",
         "height": 90,
         "width": 1700,
         "color": 7
@@ -286,6 +286,94 @@
       ]
     },
     {
+      "name": "Lane 4 · Re-read LEADS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Fresh row before sending",
+      "notesInFlow": true,
+      "id": "ac309a12-0ce4-5d1b-a0df-66ed49b395e3",
+      "position": [
+        1980,
+        4240
+      ]
+    },
+    {
+      "name": "Lane 4 · Check lead is still due",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Re-checks the lead against a FRESH read of LEADS, right before the safety gate (session 5 cross-lane guard).\n// \"Pick due leads\" read the sheet at the start of the run, up to ~45 s ago. Meanwhile Lane 7 may have marked the lead\n// hot / replied / unsubscribed, or Lane 2 / 5 may have just emailed it. Sending now would ignore that, and our row update\n// would overwrite Lane 7's status. So: still new/nurturing, same seq_step, consent, not blocked, gap respected? Else skip quietly.\nconst S = $('Lane 4 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\nfunction launchAt(S) {\n  if (S.IS_DEMO) return parseTs(S.DEMO_LAUNCH_AT);\n  const [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\n  return parseDate(S.LAUNCH_DATE)?.set({ hour, minute }) ?? null;\n}\nconst gapOk = (row, now) => !parseTs(row.last_contacted_at) || now.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// Rows read from a sheet; an empty tab comes back as one empty item (and blank rows only have a row_number), so drop those.\nconst rowsOf = (nodeName) => $(nodeName).all().map((item) => item.json).filter((row) => row && Object.entries(row).some(([key, v]) => key !== 'row_number' && String(v ?? '').trim() !== ''));\nconst now = $now.setZone(TZ);\nconst job = $('Lane 4 · Needs email?').first().json;                 // this round's lead (latest run of the IF)\nconst fresh = $input.all().map((item) => item.json).find((row) => String(row?.lead_id ?? '').trim() === job.lead_id);\nconst reasons = [];\nif (!fresh) reasons.push('lead row not found');\nelse {\n  const status = String(fresh.status ?? '').trim();\n  const seqStepRaw = String(fresh.seq_step ?? '').trim();\n  if (!['new', 'nurturing'].includes(status)) reasons.push(`status is now ${status}`);\n  if ((seqStepRaw === '' ? 0 : Number(seqStepRaw)) !== job.step - 1) reasons.push(`seq_step is now ${seqStepRaw}`);\n  if (!isTrue(fresh.consent) || String(fresh.email_allowed ?? '').trim().toUpperCase() === 'FALSE') reasons.push('no longer allowed');\n  if (!gapOk(fresh, now)) reasons.push('another lane emailed this lead moments ago');\n}\nreturn [{ json: { ...job, still_due: reasons.length === 0, stale_reason: reasons.join('; '), thread_ids_before: String(fresh?.thread_ids ?? job.thread_ids_before ?? '') }, pairedItem: { item: 0 } }];\n"
+      },
+      "notes": "Changed since the pick?",
+      "notesInFlow": true,
+      "id": "a0845f31-99a5-525c-a8ae-f57b43327cfb",
+      "position": [
+        2200,
+        4240
+      ]
+    },
+    {
+      "name": "Lane 4 · Still due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b796b1ae-3552-55b6-a439-ca3fca846e1d",
+              "leftValue": "={{ $json.still_due }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "false = skip, next lead",
+      "notesInFlow": true,
+      "id": "080664da-1319-58c2-ad42-ba849b3eb221",
+      "position": [
+        2420,
+        4240
+      ]
+    },
+    {
       "name": "Lane 4 · Demo safety gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -296,7 +384,7 @@
       "notesInFlow": true,
       "id": "d3d7163e-c059-5596-a13f-9663bb8f6c7b",
       "position": [
-        1980,
+        2640,
         4080
       ]
     },
@@ -332,7 +420,7 @@
       "notesInFlow": true,
       "id": "93d5c34f-fab9-54f0-ae5b-80a8435337bb",
       "position": [
-        2200,
+        2860,
         4080
       ]
     },
@@ -365,7 +453,7 @@
       "notesInFlow": true,
       "id": "446b1f65-5286-5d51-a782-6c7b594469df",
       "position": [
-        2420,
+        3080,
         4000
       ]
     },
@@ -381,7 +469,7 @@
       "notesInFlow": true,
       "id": "f422165c-e4d8-504a-a445-79eb7730edae",
       "position": [
-        2860,
+        3300,
         4160
       ]
     },
@@ -417,7 +505,7 @@
       "notesInFlow": true,
       "id": "6219e380-12b0-5ac6-a4c3-9324d255a4f8",
       "position": [
-        3080,
+        3520,
         4160
       ]
     },
@@ -433,7 +521,7 @@
       "notesInFlow": true,
       "id": "3d2601f5-b354-5fbc-a81c-4114ffb665da",
       "position": [
-        3300,
+        3740,
         4080
       ]
     },
@@ -734,7 +822,7 @@
       "notesInFlow": true,
       "id": "7dfdaab5-de14-53b8-acb4-5423464657b5",
       "position": [
-        3520,
+        3960,
         4080
       ]
     },
@@ -749,7 +837,7 @@
       "notesInFlow": true,
       "id": "0991e5af-ee5b-5456-a090-0ff3241c8dbd",
       "position": [
-        3740,
+        4180,
         4160
       ]
     },
@@ -913,7 +1001,7 @@
       "notesInFlow": true,
       "id": "f2334087-61d7-5d00-a85e-1069c76bd9c1",
       "position": [
-        3960,
+        4400,
         4160
       ]
     },
@@ -928,7 +1016,7 @@
       "notesInFlow": true,
       "id": "59742d38-098b-59ba-a1c8-9dedf7c4e12c",
       "position": [
-        4180,
+        4620,
         4160
       ]
     },
@@ -945,7 +1033,7 @@
       "notesInFlow": true,
       "id": "859e8a86-ff17-59b2-a3f5-67d02c749ce0",
       "position": [
-        4400,
+        4840,
         4160
       ]
     }
@@ -1044,7 +1132,7 @@
       "main": [
         [
           {
-            "node": "Lane 4 · Demo safety gate",
+            "node": "Lane 4 · Re-read LEADS",
             "type": "main",
             "index": 0
           }
@@ -1052,6 +1140,46 @@
         [
           {
             "node": "Lane 4 · Decide outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Re-read LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Check lead is still due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Check lead is still due": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Still due?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 4 · Still due?": {
+      "main": [
+        [
+          {
+            "node": "Lane 4 · Demo safety gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 4 · Loop over leads",
             "type": "main",
             "index": 0
           }

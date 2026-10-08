@@ -15,7 +15,9 @@ const wf = makeTestCopy(join(here, '..', '..', 'lanes', 'lane-5-launch-engine.js
 const n8n = await startN8n({ workflows: [wf], engine, log: console.log });
 const T = new Suite('Lane 5');
 
-const blank = { lead_id: '', created_at: '', source: 'manual', first_name: 'Asha', email: '', phone: '', city: 'Delhi', instagram_handle: '', interest: 'earrings', budget: '1500_3000', occasion: 'diwali_outfit', consent: 'TRUE', email_allowed: 'TRUE', score: '50', segment: 'warm', score_reason: '', status: 'nurturing', sequence_id: 'WAITLIST_NURTURE', seq_step: '2', next_action_at: '', last_contacted_at: ist(-600), launch_step: '0', last_newsletter_id: '', thread_ids: '', last_reply_at: '', reply_class: '', notes: '', updated_at: '' };
+// Session 5: next_action_at is in the future (between two nurture steps). A new/nurturing lead whose next nurture email is due
+// now is reserved for Lane 4 (cross-lane guard), see the scenario 'Cross-lane guard' below.
+const blank = { lead_id: '', created_at: '', source: 'manual', first_name: 'Asha', email: '', phone: '', city: 'Delhi', instagram_handle: '', interest: 'earrings', budget: '1500_3000', occasion: 'diwali_outfit', consent: 'TRUE', email_allowed: 'TRUE', score: '50', segment: 'warm', score_reason: '', status: 'nurturing', sequence_id: 'WAITLIST_NURTURE', seq_step: '2', next_action_at: ist(600), last_contacted_at: ist(-600), launch_step: '0', last_newsletter_id: '', thread_ids: '', last_reply_at: '', reply_class: '', notes: '', updated_at: '' };
 let counter = 0;
 const lead = (o = {}) => { counter++; const n = String(counter).padStart(2, '0'); return { ...blank, lead_id: `LD-T-${n}`, email: `kayademo.customers+t${n}@gmail.com`, first_name: `Lead${n}`, ...o }; };
 const fresh = (leads = [], settings = {}) => {
@@ -130,6 +132,26 @@ await T.scenario('Unsubscribed, blocked, customer, consent-FALSE and email_allow
   await run();
   T.eq('only the four active leads (new, nurturing-done, replied, hot) are emailed', mock.rows('LEADS').filter((x) => x.launch_step === '2').map((x) => x.lead_id).sort(), ['LD-DONE', 'LD-HOT', 'LD-NEW', 'LD-REP']);
   T.eq('the others untouched', ['LD-UNS', 'LD-BLK', 'LD-CUS', 'LD-NOC', 'LD-NOA'].map((id) => L(id).launch_step), ['0', '0', '0', '0', '0']);
+});
+
+await T.scenario('Cross-lane guard (session 5): a lead Lane 4 is about to email is left to Lane 4, then gets the launch email after the gap', async () => {
+  fresh([
+    lead({ lead_id: 'LD-DUE', status: 'new', seq_step: '0', next_action_at: '' }),             // welcome due now (Lane 4)
+    lead({ lead_id: 'LD-SOON', status: 'nurturing', next_action_at: ist(0.5) }),               // next nurture step within the minute
+    lead({ lead_id: 'LD-MID', status: 'nurturing', next_action_at: ist(3) }),                  // between two nurture steps
+    lead({ lead_id: 'LD-HOT2', status: 'hot', next_action_at: '' }),                            // Lane 7 moved it on: not Lane 4's
+  ], { DEMO_LAUNCH_AT: ist(-0.5) });
+  mock.setting('MAX_SENDS_PER_RUN', 10);
+  await run();
+  T.eq('only leads Lane 4 will not email this minute get the launch email', mock.rows('LEADS').filter((x) => x.launch_step === '2').map((x) => x.lead_id).sort(), ['LD-HOT2', 'LD-MID']);
+  // Lane 4 now sends a nurture step to LD-DUE (simulated) and schedules the next one 2 days (4 demo minutes) later.
+  Object.assign(L('LD-DUE'), { status: 'nurturing', seq_step: '2', last_contacted_at: ist(0), next_action_at: ist(4) });
+  await run();
+  T.eq('right after the welcome: still waiting (gap rule)', L('LD-DUE').launch_step, '0');
+  mock.shiftTime(1.05); await run();
+  T.eq('after the gap and before the next nurture step is due: launch email sent', L('LD-DUE').launch_step, '2');
+  T.eq('LD-SOON is still Lane 4\'s (its nurture step is due): no launch email yet', L('LD-SOON').launch_step, '0');
+  T.eq('each emailed lead got exactly one launch email', mock.sent.length, 3);
 });
 
 await T.scenario('Lead in the MIN_EMAIL_GAP_DAYS window waits, then gets the email', async () => {

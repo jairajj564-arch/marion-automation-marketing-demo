@@ -21,7 +21,7 @@ L.sticky('Inbox', -240, TOP, 6300, 1000, `## 📬 Lane 7 · Inbox  ·  trigger: 
 **Credentials:** Kaya Demo · Google Sheets / Gmail Sender / Gmail Demo Customers / Gemini / Groq / Telegram Bot.  **Docs:** SPEC.md §7.7 · docs/lane-7.md explains every node.`, 5);
 
 L.sticky('Demo reply helper', -200, YB - 130, 3300, 300, `### Demo helper: pretend the customer replied
-Open the form (\`/form/kaya-demo-reply\`), type the plus-address the email was sent to (e.g. \`kayademo.customers+boutique1@gmail.com\`) and pick **Interested / Question / Not now / Unsubscribe**. The flow finds the newest email from the sender in the *Demo Customers* mailbox and replies in the same thread. A minute later the top flow picks that reply up like any real reply. The reply goes to the sender address only, and still passes the safety gate.`, 7);
+Open the form (\`/form/kaya-demo-reply\`), type the plus-address the email was sent to (e.g. \`kayademo.customers+boutique1@gmail.com\`) and pick **Interested / Question / Not now / Unsubscribe**. The flow finds the newest email from the sender to that address in the *Demo Customers* mailbox and replies **in the same Gmail thread** (\`Reply to Sender Only\` on, so it goes to the sender address only, through the safety gate). The reply comes FROM the bare demo inbox, so the top flow matches it by that thread a minute later.`, 7);
 
 L.sticky('Message handling', 2050, Y + 120, 1450, 140, `### One message at a time
 Each unread mail goes through: **AI classification** (Gemini → Groq → keyword rules) → **Decide reply** (status mapping, notes, alert text) → **update the lead or prospect row** → **Telegram alert** (only for hot replies / questions) → **mark mail read** → **log**.`, 7);
@@ -628,6 +628,10 @@ let entityType = 'system';
 let entityId = address;
 for (const { json: row } of $('Lane 7 · Read LEADS').all()) if (text(row.lead_id) && lc(row.email) === address) { entityType = 'lead'; entityId = text(row.lead_id); }
 if (entityType === 'system') for (const { json: row } of $('Lane 7 · Read PROSPECTS').all()) if (text(row.prospect_id) && lc(row.email) === address) { entityType = 'prospect'; entityId = text(row.prospect_id); }
+// Session 5: only reply to a mail that went to a known lead / prospect address. The reply then sits in that mail's
+// Gmail thread, which is how the inbox flow matches it (the reply itself comes FROM the bare demo inbox address,
+// which matches no single row on its own).
+if (problems.length === 0 && entityType === 'system') problems.push(\`\${address} is not the email of any lead or prospect (type the exact plus-address the email was sent to)\`);
 
 const sender = lc(S.SENDER_EMAIL);
 return [{ json: {
@@ -658,10 +662,20 @@ const fromMatch = /<([^>]+)>/.exec(fromText);
 const fromAddress = text(fromMatch ? fromMatch[1] : fromText).toLowerCase();
 const messageId = text(found.id);
 const fromOk = !fromAddress || fromAddress === form.sender_email || fromAddress.replace(/\\+[^@]*@/, '@') === form.sender_email;
+// The reply must land in the SAME Gmail thread as the mail the lanes sent (Lane 7 matches it by thread id), so the
+// found mail must have a thread id and must really have been sent to this address (not to another plus-address).
+const toRaw = found.To ?? found.to ?? '';
+const toText = (typeof toRaw === 'string' ? toRaw : (toRaw.text || JSON.stringify(toRaw))).toLowerCase();
+const toOk = !toText || toText.includes(form.address);
+const threadId = text(found.threadId);
+const reason = !messageId ? \`no email from \${form.sender_email} to \${form.address} in the Demo Customers mailbox\`
+  : !fromOk ? \`newest mail is from \${fromAddress}, not the sender\`
+  : !toOk ? \`newest mail was sent to \${toText}, not to \${form.address}\`
+  : !threadId ? 'the mail has no Gmail thread id, so the reply could not be matched' : '';
 return [{ json: {
-  ...form, found: !!messageId && fromOk, message_id: messageId, thread_id: text(found.threadId),
+  ...form, found: !reason, message_id: messageId, thread_id: threadId,
   to_email: form.sender_email, html: \`<p>\${escapeHtml(form.canned_text)}</p>\`,
-  not_found_reason: !messageId ? \`no email from \${form.sender_email} to \${form.address} in the Demo Customers mailbox\` : (!fromOk ? \`newest mail is from \${fromAddress}, not the sender\` : ''),
+  not_found_reason: reason,
 } }];
 `, 'Reply text + target mail');
 const msgFound = L.ifBool('Message found?', 2090, YB, 'found', 'false = nothing to reply to');
@@ -670,7 +684,7 @@ const allowedB = L.ifBool('Recipient allowed?', 2470, YB, 'gate_ok', 'true = may
 const reply = L.add({
   name: L.name('Reply in Demo Customers inbox'),
   type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [2660, YB],
-  parameters: { resource: 'message', operation: 'reply', messageId: '={{ $json.message_id }}', emailType: 'html', message: '={{ $json.html }}', options: { appendAttribution: false } },
+  parameters: { resource: 'message', operation: 'reply', messageId: '={{ $json.message_id }}', emailType: 'html', message: '={{ $json.html }}', options: { appendAttribution: false, replyToSenderOnly: true } },
   credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Demo Customers' } },
   retryOnFail: false, onError: 'continueErrorOutput',
   notes: 'Gmail reply · never retried', notesInFlow: true,

@@ -18,6 +18,7 @@ export class Mock {
     this.fail = {};        // fault injection, see failNext()
     this.typed = false;    // return numbers/booleans instead of text (as Sheets sometimes does)
     this.aiScript = null;  // function (provider, body) => response or { status, body }
+    this.onRead = null;    // function (tab, nthReadOfTab, mock): lets a test change the sheet between reads (another lane acting)
     this.nextThread = 1; this.nextMsg = 100;
   }
   // failNext('gmail', 2) -> the next 2 Gmail calls fail. failNext('sheets:EVENTS_LOG:append', 99).
@@ -75,7 +76,9 @@ export class Mock {
     if (op === 'read') {
       this.reads.push(tab);
       if (this.shouldFail(`sheets:${tab}:read`)) return { status: 500, body: { message: `Sheets read of ${tab} failed (mock)` } };
-      return { status: 200, body: this.tabs[tab].map((r, i) => ({ ...this.coerce(r), row_number: i + 2 })) };
+      const rows = this.tabs[tab].map((r, i) => ({ ...this.coerce(r), row_number: i + 2 }));
+      if (this.onRead) this.onRead(tab, this.reads.filter((t) => t === tab).length, this);   // the change lands AFTER this read
+      return { status: 200, body: rows };
     }
     if (this.shouldFail(`sheets:${tab}:${op}`)) return { status: 500, body: { message: `Sheets ${op} on ${tab} failed (mock)` } };
     const cols = headersOf(tab);

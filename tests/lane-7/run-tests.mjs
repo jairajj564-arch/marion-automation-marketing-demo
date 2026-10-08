@@ -415,6 +415,7 @@ await T.scenario('17 · demo reply form: each reply type replies in the same thr
     const reply = (await api.calls('gmail_reply'))[0];
     T.check(!!reply && reply.payload.message_id === 'dm-1' && reply.payload.html.includes(snippet), `${label}: replied to the found message with the canned text`);
     T.eq(reply.payload.to, 'kayademo.hello@gmail.com', `${label}: the reply goes to the sender address`);
+    T.eq(reply.payload.reply_to_sender_only, true, `${label}: "Reply to Sender Only" is on (the reply never goes back to the plus-address)`);
     const ev = evOf(await events(), 'demo_reply_simulated');
     T.check(ev.length === 1 && ev[0].entity_type === 'prospect' && ev[0].entity_id === 'PR-B01' && meta(ev[0]).reply_type === key, `${label}: demo_reply_simulated for PR-B01 with reply_type ${key}`);
   }
@@ -438,6 +439,18 @@ await T.scenario('18 · demo reply form: nothing found / bad answers / failed re
   await reset({ config: { demoMailbox: [{ id: 'dm-7', threadId: 't', From: 'Someone Else <other@example.com>' }] } });
   r = await form('kayademo.customers+boutique1@gmail.com', 'Interested');
   T.eq((await api.calls('gmail_reply')).length, 0, 'newest mail not from the sender: no reply');
+  // Session 5: the reply must sit in the thread of a mail the lanes sent to a KNOWN lead/prospect address.
+  await reset({ config: { demoMailbox: demoMail('kayademo.customers@gmail.com') } });
+  r = await form('kayademo.customers@gmail.com', 'Interested');
+  T.check(evOf(await events(), 'error').some((e) => e.detail.includes('is not the email of any lead or prospect')), 'the bare demo inbox (no row) is refused with a clear message');
+  T.eq((await api.calls('gmail_getall')).length, 0, 'bare inbox: Gmail was not searched');
+  await reset({ config: { demoMailbox: demoMail('kayademo.customers+boutique2@gmail.com') } });
+  r = await form('kayademo.customers+boutique1@gmail.com', 'Interested');
+  T.eq((await api.calls('gmail_reply')).length, 0, 'newest mail went to another plus-address: no reply');
+  T.check(evOf(await events(), 'error').some((e) => e.detail.includes('not to kayademo.customers+boutique1@gmail.com')), 'wrong-address mail logged');
+  await reset({ config: { demoMailbox: [{ ...demoMail('kayademo.customers+boutique1@gmail.com')[0], threadId: '' }] } });
+  r = await form('kayademo.customers+boutique1@gmail.com', 'Interested');
+  T.eq((await api.calls('gmail_reply')).length, 0, 'mail without a thread id: no reply (it could not be matched)');
   await reset({ config: { demoMailbox: demoMail('kayademo.customers+boutique1@gmail.com'), gmailReplyFail: true } });
   r = await form('kayademo.customers+boutique1@gmail.com', 'Interested');
   T.eq(r.status, 200, 'reply failure: run finished');

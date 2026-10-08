@@ -69,9 +69,9 @@ export class Lane {
       notes: cron, notesInFlow: true,
     });
   }
-  read(tab, x, y, { once = true, note } = {}) {
+  read(tab, x, y, { once = true, note, short } = {}) {
     return this.add({
-      name: this.name(`Read ${tab}`), type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5,
+      name: this.name(short ?? `Read ${tab}`), type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5,
       parameters: { operation: 'read', ...sheetRef(tab), options: {} }, x, y,
       credentials: sheetsCred, ...retry, ...(once ? { executeOnce: true } : {}), alwaysOutputData: true,
       notes: note ?? `Reads every row of ${tab}`, notesInFlow: true,

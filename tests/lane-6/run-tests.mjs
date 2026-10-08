@@ -131,6 +131,21 @@ await T.scenario('4 · a prospect whose status turns interested / replied / do_n
   }
 });
 
+await T.scenario('4b · cross-lane guard (session 5): a reply Lane 7 records DURING the run stops the send and keeps Lane 7\'s status', async () => {
+  for (const status of ['interested', 'replied', 'do_not_contact']) {
+    // PR-B02 is picked (1st PROSPECTS read), then Lane 7 marks it before Lane 6 reaches it.
+    await reset({ config: { afterRead: [{ tab: 'PROSPECTS', nth: 1, id: 'PR-B02', set: { status, next_action_at: '' } }] } });
+    await only('PR-B01', 'PR-B02', 'PR-B03');
+    const r = await run();
+    T.eq(r.status, 200, `${status}: run finished`);
+    const to = (await sends()).map((m) => m.to);
+    T.check(to.length === 2 && !to.includes('kayademo.customers+boutique2@gmail.com'), `${status}: the other two were emailed, PR-B02 was not (${to.join(', ')})`);
+    const row = (await rows())['PR-B02'];
+    T.eq([row.status, row.seq_step], [status, '0'], `${status}: Lane 7's status survives, seq_step untouched`);
+    T.eq((await events()).filter((e) => e.entity_id === 'PR-B02').length, 0, `${status}: nothing logged for PR-B02`);
+  }
+});
+
 await T.scenario('5 · blocked address (someone@example.com): status blocked, email_allowed FALSE, nothing sent to it', async () => {
   await reset();
   await edit('PR-B04', { email: 'someone@example.com' });

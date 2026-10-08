@@ -18,7 +18,7 @@ L.sticky('Outreach', -240, 6000, 6200, 1000, `## 🪔 Lane 6 · Outreach  ·  tr
 **Credentials:** Kaya Demo · Google Sheets / Gmail Sender / Gemini / Groq.  **Docs:** SPEC.md §7.6 · docs/lane-6.md explains every node.`, 4);
 
 L.sticky('How one prospect is handled', -200, 6420, 1500, 120, `### One prospect, step by step
-**Send this one?** → **AI opener needed?** (step 1 only) → Gemini → Groq → template sentence → **Render email** → **Demo safety gate** → **Recipient allowed?** → **Send email** → **Decide outcome** → **Update PROSPECTS row** → **Save to EVENTS_LOG** → **Pause**. Every path (sent, blocked, failed, skipped) meets in *Decide outcome*, so the row is always updated before the log is written.`, 7);
+**Send this one?** → **AI opener needed?** (step 1 only) → Gemini → Groq → template sentence → **Render email** → **Re-read PROSPECTS** (still due?) → **Demo safety gate** → **Recipient allowed?** → **Send email** → **Decide outcome** → **Update PROSPECTS row** → **Save to EVENTS_LOG** → **Pause**. Every path (sent, blocked, failed, skipped) meets in *Decide outcome*, so the row is always updated before the log is written.`, 7);
 
 // ───────────────────────────── start of the lane ─────────────────────────────
 const trigger = L.add({
@@ -409,18 +409,45 @@ L.link(needAi, render, 1);       // no AI needed → render directly
 L.link(pickOpener, render);
 
 const ready = L.ifBool('Email ready?', 3220, Y, 'render_ok', 'false = template problem');
-const gate = L.code('Demo safety gate', 3440, Y, SAFETY_GATE(6), 'Only demo inboxes pass');
-const allowed = L.ifBool('Recipient allowed?', 3660, Y, 'gate_ok', 'true = may send');
+const reread = L.sheetsRead('Re-read PROSPECTS', 'PROSPECTS', 3440, Y, 'Fresh row before sending', { executeOnce: true, alwaysOutputData: true });
+const stillDue = L.code('Check prospect is still due', 3660, Y, `// Re-checks the prospect against a FRESH read of PROSPECTS, right before the safety gate (session 5 cross-lane guard).
+// "Pick due prospects" read the sheet at the start of the run, up to ~100 s ago (AI calls take time). Meanwhile Lane 7 may
+// have marked this prospect replied / interested / do_not_contact. Sending now would ignore the reply, and our row update
+// would overwrite Lane 7's status. So: still new/contacted, same seq_step, gap respected? Otherwise skip quietly.
+const S = $('Lane 6 · Settings to object').first().json;
+${TIME_HELPERS}
+const now = $now.setZone(TZ);
+const job = $('Lane 6 · Email ready?').first().json;                      // this round's prospect (latest run of the IF)
+const text = (value) => String(value ?? '').trim();
+const fresh = $input.all().map((item) => item.json).find((row) => text(row?.prospect_id) === job.prospect_id);
+const reasons = [];
+if (!fresh) reasons.push('prospect row not found');
+else {
+  const status = text(fresh.status).toLowerCase();
+  const seqRaw = text(fresh.seq_step);
+  if (!['new', 'contacted'].includes(status)) reasons.push(\`status is now \${status}\`);
+  if ((seqRaw === '' ? 0 : Number(seqRaw)) !== job.seq_step) reasons.push(\`seq_step is now \${seqRaw}\`);
+  const last = parseTs(fresh.last_contacted_at);
+  if (last && now.toMillis() - last.toMillis() < Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS) reasons.push('emailed moments ago');
+}
+return [{ json: { ...job, still_due: reasons.length === 0, stale_reason: reasons.join('; '), thread_ids: fresh ? text(fresh.thread_ids) : job.thread_ids }, pairedItem: { item: 0 } }];
+`, 'Changed since the pick?');
+const isStillDue = L.ifBool('Still due?', 3880, Y, 'still_due', 'false = skip, next prospect');
+const gate = L.code('Demo safety gate', 4100, Y, SAFETY_GATE(6), 'Only demo inboxes pass');
+const allowed = L.ifBool('Recipient allowed?', 4320, Y, 'gate_ok', 'true = may send');
 const send = L.add({
   name: L.name('Send email'),
-  type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [3880, Y],
+  type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [4540, Y],
   parameters: { resource: 'message', operation: 'send', sendTo: '={{ $json.safe_to }}', subject: '={{ $json.subject }}', emailType: 'html', message: '={{ $json.html }}', options: { appendAttribution: false, senderName: '={{ $json.sender_name }}' } },
   credentials: { gmailOAuth2: { id: '', name: 'Kaya Demo · Gmail Sender' } },
   retryOnFail: false, onError: 'continueErrorOutput',
   notes: 'Gmail send · never retried', notesInFlow: true,
 });
 L.chain(render, ready);
-L.link(ready, gate, 0);
+L.link(ready, reread, 0);
+L.chain(reread, stillDue, isStillDue);
+L.link(isStillDue, gate, 0);
+L.link(isStillDue, loop, 1);     // changed meanwhile: nothing sent, nothing written, next prospect
 L.chain(gate, allowed);
 L.link(allowed, send, 0);
 
@@ -436,7 +463,7 @@ const result = $input.first().json;
 const error = typeof result.error === 'string' ? result.error : (result.error?.message || JSON.stringify(result).slice(0, 200));
 return [{ json: { ...job, outcome: 'failed', error: String(error).slice(0, 200) } }];
 `, 'Tag: failed');
-const markBlocked = L.code('Mark blocked', 3880, Y3 + 200, `// The safety gate said no: tag the prospect so the row becomes status blocked.
+const markBlocked = L.code('Mark blocked', 4120, Y3 + 200, `// The safety gate said no: tag the prospect so the row becomes status blocked.
 return [{ json: { ...$input.first().json, outcome: 'blocked' } }];
 `, 'Tag: blocked');
 L.link(send, markSent, 0);

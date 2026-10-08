@@ -17,7 +17,7 @@
   {
     "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
     "ok": true,
-    "message": "row published: published tg:101 2026-10-08T19:44:59+05:30"
+    "message": "row published: published tg:101 2026-10-09T00:10:37+05:30"
   },
   {
     "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
@@ -277,7 +277,7 @@
   {
     "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
     "ok": true,
-    "message": "SEND_DELAY_SECONDS respected between emails (0,1058,1065 ms)"
+    "message": "SEND_DELAY_SECONDS respected between emails (0,1076,1055 ms)"
   },
   {
     "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
@@ -385,6 +385,21 @@
     "message": "DEMO_MODE FALSE: a real half day (12 h) applies — 11 h ago waits, 13 h ago is mailed"
   },
   {
+    "scenario": "Cross-lane guard: a lead Lane 4 is about to email (nurture step due within a minute) is left to Lane 4 and gets the newsletter later",
+    "ok": true,
+    "message": "only leads Lane 4 will not email this minute got it (kayademo.customers+l3@gmail.com, kayademo.customers+l4@gmail.com)"
+  },
+  {
+    "scenario": "Cross-lane guard: a lead Lane 4 is about to email (nurture step due within a minute) is left to Lane 4 and gets the newsletter later",
+    "ok": true,
+    "message": "the newsletter keeps publishing while two leads are waiting"
+  },
+  {
+    "scenario": "Cross-lane guard: a lead Lane 4 is about to email (nurture step due within a minute) is left to Lane 4 and gets the newsletter later",
+    "ok": true,
+    "message": "once Lane 4 is done with them they get it, and it is published (newsletter:4 sent)"
+  },
+  {
     "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
     "ok": true,
     "message": "only demo-inbox plus-addresses were emailed (kayademo.customers+upper@gmail.com,kayademo.customers+l6@gmail.com)"
@@ -437,7 +452,7 @@
   {
     "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
     "ok": true,
-    "message": "one email_failed event (Newsletter CNT-20261008-143205-33 not sent: 500 - \"{\\\"message\\\":\\\"gmail send failed (mock)\\\"}\")"
+    "message": "one email_failed event (Newsletter CNT-20261008-143205-34 not sent: 500 - \"{\\\"message\\\":\\\"gmail send failed (mock)\\\"}\")"
   },
   {
     "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",

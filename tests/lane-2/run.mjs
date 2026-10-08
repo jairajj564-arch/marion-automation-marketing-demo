@@ -32,7 +32,9 @@ const content = (o = {}) => {
 };
 const lead = (n, o = {}) => ({
   lead_id: `LD-20261001-L${String(n).padStart(3, '0')}`, created_at: T(-5000), source: 'sample_data', first_name: `Lead${n}`, email: `kayademo.customers+l${n}@gmail.com`, city: 'Pune',
-  consent: 'TRUE', email_allowed: 'TRUE', score: 50, segment: 'warm', status: 'nurturing', sequence_id: 'WAITLIST_NURTURE', seq_step: 2, launch_step: 0, updated_at: T(-5000), ...o,
+  consent: 'TRUE', email_allowed: 'TRUE', score: 50, segment: 'warm', status: 'nurturing', sequence_id: 'WAITLIST_NURTURE', seq_step: 2, launch_step: 0, updated_at: T(-5000),
+  next_action_at: T(600),      // session 5: between two nurture steps (a lead whose nurture email is due now is left to Lane 4)
+  ...o,
 });
 const NEWSLETTER = { asset_type: 'newsletter', channel: 'email', title: 'A first look, {{first_name}}', body: '<p>Hi {{first_name}},</p><p>The Roshni Edit is almost here.</p><p>{{unsubscribe_line}}</p>', hashtags: '', meta_description: 'Preview text' };
 
@@ -251,6 +253,20 @@ try {
   fresh({ DEMO_MODE: 'FALSE', MIN_EMAIL_GAP_DAYS: 0.5 }, [content({ ...NEWSLETTER, scheduled_for: T(-8) })], [lead(1, { last_contacted_at: T(-60 * 11) }), lead(2, { last_contacted_at: T(-60 * 13) })]);
   await run();
   results.check(mock.sent.length === 1 && mock.sent[0].to === lead(2).email, 'DEMO_MODE FALSE: a real half day (12 h) applies — 11 h ago waits, 13 h ago is mailed');
+
+  // ------------------------------------------------------------------ 8b (session 5)
+  results.begin('Cross-lane guard: a lead Lane 4 is about to email (nurture step due within a minute) is left to Lane 4 and gets the newsletter later');
+  const news8b = content({ ...NEWSLETTER, scheduled_for: T(-8), status: 'approved' });
+  const dueNow = lead(1, { status: 'new', seq_step: 0, next_action_at: '' });         // the welcome is due: Lane 4's
+  const dueSoon = lead(2, { next_action_at: T(0.5) });                                   // next nurture step within the minute
+  fresh({}, [news8b], [dueNow, dueSoon, lead(3), lead(4, { status: 'hot', next_action_at: '' })]);
+  await run();
+  results.check(mock.sent.map((m) => m.to).sort().join() === [lead(3).email, lead(4).email].sort().join(), `only leads Lane 4 will not email this minute got it (${mock.sent.map((m) => m.to).join(', ')})`);
+  results.check(C(news8b.content_id).status === 'publishing', 'the newsletter keeps publishing while two leads are waiting');
+  Object.assign(mock.rows('LEADS').find((r) => r.lead_id === dueNow.lead_id), { status: 'nurturing', seq_step: 1, last_contacted_at: T(-3), next_action_at: T(4) });   // Lane 4 sent the welcome a while ago
+  Object.assign(mock.rows('LEADS').find((r) => r.lead_id === dueSoon.lead_id), { seq_step: 3, last_contacted_at: T(-3), next_action_at: T(4) });
+  await run();
+  results.check(mock.sent.length === 4 && C(news8b.content_id).status === 'published' && C(news8b.content_id).publish_ref === 'newsletter:4 sent', `once Lane 4 is done with them they get it, and it is published (${C(news8b.content_id).publish_ref})`);
 
   // ------------------------------------------------------------------ 9
   results.begin('Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked');
