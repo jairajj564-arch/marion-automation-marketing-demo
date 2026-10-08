@@ -1,0 +1,1174 @@
+{
+  "name": "Kaya Jewels demo · Lane 1 · Content engine",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🪔 Lane 1 · Content engine  ·  trigger: Manual (click *Execute workflow* → **Lane 1 · Start**)\n**What it does:** reads **BRIEF** + **SETTINGS** → asks **Gemini** (falls back to **Groq**) for 5 jobs: blog + SEO fields, 5 Instagram captions, 3 reel ideas, 1 newsletter, blog → 3 short posts → scores every item (SEO, format and fact checks) → saves 13 rows to **CONTENT** with status `pending_approval` and a posting time → sends you a Telegram approval list → logs to **EVENTS_LOG**.\n**You approve** by changing `status` to `approved` in CONTENT; Lane 2 publishes approved rows when `scheduled_for` arrives.\n**Credentials:** Kaya Demo · Google Sheets / Gemini / Groq / Telegram Bot.  **Docs:** SPEC.md §7.1 · NODES.md explains every node.",
+        "height": 1000,
+        "width": 3660,
+        "color": 1
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "5f94b0fd-b290-51a2-8f38-8d44e9f03cc3",
+      "name": "Lane 1 · Content engine"
+    },
+    {
+      "parameters": {
+        "content": "### How the AI loop works\n1. **Loop over asset jobs** hands over one job at a time (the blog always goes first).\n2. **Build AI request** writes the prompt: brand voice + BRIEF facts + the job's instructions + the JSON shape we want back.\n3. **Ask Gemini** (3 tries, 5 s apart) → **Read Gemini reply** → **Check AI answer** (valid JSON, nothing missing?).\n4. Not usable? **Need Groq fallback?** sends the same job to **Ask Groq (fallback)** → **Read Groq reply** → the same check.\n5. **Pause between AI calls** waits `AI_WAIT_SECONDS` (free-tier rate limits), then the loop takes the next job.\n\nWhen all 5 jobs are done, the loop's **done** output (top right of the loop node) continues to the checks and the sheet.\nA job that fails on both providers is skipped and reported in Telegram; the other jobs still get saved.",
+        "height": 500,
+        "width": 1520,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        420
+      ],
+      "id": "c1f40c5d-1a06-52de-860d-7e73fc6db27c",
+      "name": "Lane 1 · How the AI loop works"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        280
+      ],
+      "id": "dc2c1a57-b8c6-5af8-b9e3-6bf164b282d9",
+      "name": "Lane 1 · Start",
+      "notes": "Click Execute workflow",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SETTINGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        280
+      ],
+      "id": "2c719847-0909-54b2-bca4-1edb2e4fe6d9",
+      "name": "Lane 1 · Read SETTINGS",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Reads every row of SETTINGS",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// SETTINGS arrives as one item per row (key | value | type | description).\n// Turn it into ONE item, e.g. { DEMO_MODE: 'TRUE', GEMINI_MODEL: 'gemini-2.5-flash', ... },\n// so every later node can read settings with $('Lane 1 · Settings to object').first().json.KEY\nconst settings = {};\nfor (const item of $input.all()) {\n  const key = String(item.json.key ?? '').trim();\n  if (!key) continue;\n  const value = item.json.value;\n  settings[key] = typeof value === 'string' ? value.trim() : (value ?? '');\n}\n\n// Stop early with a clear message if the sheet is missing something Lane 1 needs.\nconst required = [\n  'DEMO_MODE', 'DEMO_MINUTES_PER_DAY', 'LAUNCH_DATE', 'LAUNCH_TIME', 'EARLY_ACCESS_DAYS',\n  'WAITLIST_FORM_URL', 'TELEGRAM_OWNER_CHAT_ID', 'BRAND_VOICE', 'GEMINI_MODEL', 'GROQ_MODEL',\n  'AI_TEMPERATURE', 'AI_WAIT_SECONDS', 'POST_TIMES', 'CONTENT_START_IN_DAYS',\n];\nconst missing = required.filter((key) => settings[key] === undefined || settings[key] === '');\nif (missing.length) {\n  throw new Error(`The SETTINGS tab is missing a value for: ${missing.join(', ')}`);\n}\n\n// Derived values (SPEC section 5.3). Sheet booleans may come back as true or \"TRUE\".\nsettings.IS_DEMO = String(settings.DEMO_MODE).trim().toUpperCase() === 'TRUE';\nconst demoMinutes = Number(settings.DEMO_MINUTES_PER_DAY);\nif (settings.IS_DEMO && !(demoMinutes > 0)) {\n  throw new Error('DEMO_MINUTES_PER_DAY must be a number above 0 when DEMO_MODE is TRUE');\n}\nsettings.DAY_MS = settings.IS_DEMO ? demoMinutes * 60 * 1000 : 24 * 60 * 60 * 1000;\n\nreturn [{ json: settings }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        280
+      ],
+      "id": "782bc63c-34ad-5d21-8c8e-048c21ddf24a",
+      "name": "Lane 1 · Settings to object",
+      "notes": "Rows → one settings item",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BRIEF",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        280
+      ],
+      "id": "f3ae68df-ed29-5243-ae25-66cef662c5de",
+      "name": "Lane 1 · Read BRIEF",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Reads every row of BRIEF",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn the BRIEF rows into the text blocks every AI prompt uses, plus the lists the\n// quality checks need (allowed prices, forbidden phrases). The AI may only use these facts.\nconst S = $('Lane 1 · Settings to object').first().json;\nconst TZ = 'Asia/Kolkata';\nconst rows = $input.all().map((item) => item.json).filter((row) => String(row.key ?? '').trim());\n\n// Dates can come back from Sheets as text (2026-10-26) or, if the cell was auto-formatted, 26/10/2026.\nfunction parseDate(value) {\n  const text = String(value ?? '').trim();\n  for (const format of [null, 'dd/MM/yyyy', 'd/M/yyyy']) {\n    const date = format ? DateTime.fromFormat(text, format, { zone: TZ }) : DateTime.fromISO(text, { zone: TZ });\n    if (date.isValid) return date;\n  }\n  throw new Error(`SETTINGS LAUNCH_DATE \"${text}\" is not a date. Use the format 2026-10-26.`);\n}\nconst [hour, minute] = String(S.LAUNCH_TIME).split(':').map(Number);\nconst launch = parseDate(S.LAUNCH_DATE).set({ hour: hour || 0, minute: minute || 0 });\nconst publicLaunch = launch.plus({ days: Number(S.EARLY_ACCESS_DAYS) || 0 });\n\n// Tokens allowed inside BRIEF values (SPEC section 6.3).\nconst tokens = {\n  launch_date: launch.toFormat('cccc, d LLLL'),\n  public_launch_date: publicLaunch.toFormat('cccc, d LLLL'),\n  waitlist_form_url: S.WAITLIST_FORM_URL,\n};\nconst fill = (text) => String(text ?? '').replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (match, key) => (key in tokens ? tokens[key] : match));\n\nconst byKey = {};\nfor (const row of rows) byKey[String(row.key).trim()] = fill(row.value);\n\nconst needed = ['brand_name', 'brand_instagram', 'collection_name', 'campaign_name', 'offer_code', 'offer_percent', 'seo_keywords', 'forbidden_phrases'];\nconst missing = needed.filter((key) => !byKey[key]);\nif (missing.length) throw new Error(`The BRIEF tab is missing: ${missing.join(', ')}`);\n\n// Lane 1 writes consumer content, so it uses facts marked \"all\" or \"consumer\" and every \"rule\".\nconst aiUse = (row) => String(row.ai_use ?? '').trim().toLowerCase();\nconst factRows = rows.filter((row) => ['all', 'consumer'].includes(aiUse(row)));\nconst ruleRows = rows.filter((row) => aiUse(row) === 'rule');\nconst factsText = factRows\n  .map((row, index) => `F${String(index + 1).padStart(2, '0')} [${String(row.key).trim()}] ${fill(row.value)}`)\n  .join('\\n');\nconst rulesText = ruleRows.map((row) => `- ${String(row.key).trim()}: ${fill(row.value)}`).join('\\n');\n\n// Numbers the AI is allowed to print. Anything else is flagged by the quality checks.\nconst allFactText = factRows.map((row) => fill(row.value)).join('\\n');\nconst toNumber = (text) => Number(String(text).replace(/[^\\d.]/g, ''));\nconst allowedPrices = [...new Set((allFactText.match(/₹\\s?[\\d,]+/g) || []).map(toNumber))];\nconst allowedPercents = [...new Set((allFactText.match(/\\d+(?:\\.\\d+)?\\s?%/g) || []).map(toNumber))];\nconst splitList = (text) => String(text).split(';').map((part) => part.trim()).filter(Boolean);\n\nreturn [{\n  json: {\n    brand_name: byKey.brand_name,\n    brand_instagram: byKey.brand_instagram,\n    collection_name: byKey.collection_name,\n    campaign_name: byKey.campaign_name,\n    offer_code: byKey.offer_code,\n    offer_percent: byKey.offer_percent,\n    launch_date: tokens.launch_date,\n    public_launch_date: tokens.public_launch_date,\n    waitlist_form_url: S.WAITLIST_FORM_URL,\n    facts_text: factsText,\n    rules_text: rulesText,\n    fact_count: factRows.length,\n    seo_keywords: splitList(byKey.seo_keywords),\n    forbidden_phrases: splitList(byKey.forbidden_phrases).map((phrase) => phrase.toLowerCase()),\n    allowed_prices: allowedPrices,\n    allowed_percents: allowedPercents,\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        280
+      ],
+      "id": "58434f1d-590a-5047-8daf-35af60bcfe68",
+      "name": "Lane 1 · Build brief facts",
+      "notes": "Facts + rules for the AI",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per AI job. The loop after this node handles them one at a time.\n// The blog MUST stay first: the last job (repurpose) reads the blog written in round 1.\nconst batchId = `B-${$now.setZone('Asia/Kolkata').toFormat('yyyyMMdd-HHmmss')}`;\n\nconst jobs = [\n  { job_type: 'blog_article', label: 'Blog article + SEO fields' },\n  { job_type: 'ig_captions', label: '5 Instagram captions' },\n  { job_type: 'reel_ideas', label: '3 reel ideas' },\n  { job_type: 'newsletter', label: 'Newsletter' },\n  { job_type: 'blog_repurpose', label: 'Blog repurposed into 3 short posts' },\n];\n\nreturn jobs.map((job, index) => ({\n  json: {\n    batch_id: batchId,\n    job_no: index + 1,\n    request_id: `${batchId}:${job.job_type}`,\n    ...job,\n  },\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        280
+      ],
+      "id": "526811a7-a3fb-59ca-b76d-e2919cfa15f6",
+      "name": "Lane 1 · List asset jobs",
+      "notes": "5 AI jobs, blog first",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        280
+      ],
+      "id": "f6e30f0c-4a50-5b4c-9f85-c4e0c05e5ef9",
+      "name": "Lane 1 · Loop over asset jobs",
+      "notes": "One job per round",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the prompt for the current job, plus the exact request bodies for Gemini (main)\n// and Groq (fallback). Both providers get the same instructions and the same BRIEF facts.\nconst S = $('Lane 1 · Settings to object').first().json;\nconst B = $('Lane 1 · Build brief facts').first().json;\nconst job = $input.first().json;\n\nconst system = [\n  `You are the in-house content writer for ${B.brand_name} (${B.brand_instagram}), a handmade jewellery brand from Jaipur that sells on Instagram in India.`,\n  `Campaign: ${B.campaign_name}.`,\n  '',\n  'BRAND VOICE',\n  S.BRAND_VOICE,\n  '',\n  'FACT RULES (most important)',\n  '1. The BRIEF FACTS below are the only source of truth. Use nothing else.',\n  '2. Never invent or change product names, prices, materials, discounts, codes, dates, shipping or delivery promises, stock levels, reviews, awards, statistics, people or quotes.',\n  '3. If you need a detail that is not in the facts, leave it out or stay general (no numbers).',\n  '4. Write prices exactly as they appear in the facts, for example ₹2,450.',\n  `5. The only offer you may mention is the waitlist offer: early access plus ${B.offer_percent}% off.`,\n  `6. Every call to action points to the waitlist. Instagram text says \"link in bio\". Where a real link is needed, use exactly: ${B.waitlist_form_url}`,\n  '',\n  'WRITING RULES',\n  B.rules_text,\n  '',\n  'BRIEF FACTS',\n  B.facts_text,\n  '',\n  'Answer with one JSON object only. No markdown fences, no comments.',\n].join('\\n');\n\n// Gemini \"responseSchema\" types (OpenAPI subset, upper case).\nconst str = (description) => ({ type: 'STRING', description });\nconst list = (items, min, max) => ({ type: 'ARRAY', items, minItems: min, maxItems: max });\nconst obj = (properties) => ({ type: 'OBJECT', properties, required: Object.keys(properties), propertyOrdering: Object.keys(properties) });\n\n// Look back at earlier loop rounds for the blog (it is always job 1). Used by the repurpose job.\nfunction findBlog() {\n  for (let round = 0; round < $runIndex; round++) {\n    const previous = $('Lane 1 · Pause between AI calls').all(0, round)[0]?.json;\n    if (previous?.job_type === 'blog_article' && previous.ai_ok) return previous.ai_data;\n  }\n  return null;\n}\n\nconst JOBS = {\n  blog_article: () => ({\n    maxTokens: 4000,\n    prompt: [\n      `Write one SEO blog article for the ${B.brand_name} website about the ${B.collection_name} Diwali launch.`,\n      `- target_keyword: choose ONE phrase from this list and copy it exactly: ${B.seo_keywords.join(' | ')}.`,\n      '- article_markdown: 600 to 900 words of Markdown. Start with exactly one H1 line (\"# ...\"). Then 3 to 5 H2 sections (\"## ...\"). H3 (\"### ...\") only inside an H2 section. No H4.',\n      '- Put the exact target keyword in the H1, in the first paragraph and in at least one H2.',\n      '- Short paragraphs of 2 to 4 sentences. Keep the average sentence under 18 words. Use plain, everyday words.',\n      '- Mention at least 3 products from the facts with their exact prices.',\n      `- End with a short section inviting readers to join the waitlist for early access and ${B.offer_percent}% off, with this Markdown link: [Join the waitlist](${B.waitlist_form_url})`,\n      '- seo_title: at most 60 characters, contains the target keyword.',\n      '- meta_description: 120 to 155 characters, contains the target keyword, ends with a call to action.',\n      '- slug: lowercase words joined by hyphens, at most 60 characters, based on the target keyword.',\n    ].join('\\n'),\n    schema: obj({\n      target_keyword: str('Exactly one phrase from the allowed keyword list'),\n      seo_title: str('At most 60 characters, contains the target keyword'),\n      meta_description: str('120 to 155 characters, contains the target keyword'),\n      slug: str('lowercase-words-with-hyphens, at most 60 characters'),\n      article_markdown: str('600 to 900 words of Markdown starting with one H1'),\n    }),\n    example: {\n      target_keyword: 'one phrase from the list',\n      seo_title: 'max 60 characters',\n      meta_description: '120-155 characters',\n      slug: 'lowercase-hyphen-slug',\n      article_markdown: '# H1 title\\n\\nFirst paragraph...\\n\\n## H2 ...',\n    },\n  }),\n\n  ig_captions: () => ({\n    maxTokens: 2500,\n    prompt: [\n      `Write 5 different Instagram captions for the weeks before early access to ${B.collection_name} opens.`,\n      'Use these 5 angles, one each, in this order: 1) collection reveal teaser, 2) the artisans and the handmade process, 3) one product spotlight with its exact price, 4) Diwali gifting, 5) the waitlist offer (early access + 10% off).',\n      'For each caption:',\n      '- angle: the angle name.',\n      '- hook: the first line, at most 125 characters, scroll-stopping, no hashtags.',\n      '- caption: the full caption starting with the hook line, 60 to 150 words, line breaks allowed, at most 3 emojis, ending with a call to action to join the waitlist via the link in bio. No hashtags inside the caption.',\n      '- hashtags: 8 to 12 hashtags, each starting with #, always including #KayaJewels and #RoshniEdit.',\n      '- cta: the call-to-action sentence you used.',\n      '- image_idea: one sentence describing the photo or carousel to pair with it, using only products from the facts.',\n    ].join('\\n'),\n    schema: obj({\n      captions: list(obj({\n        angle: str('Angle name'),\n        hook: str('First line, max 125 characters'),\n        caption: str('Full caption, 60-150 words, no hashtags'),\n        hashtags: list({ type: 'STRING' }, 8, 12),\n        cta: str('Call-to-action sentence'),\n        image_idea: str('Photo idea'),\n      }), 5, 5),\n    }),\n    example: {\n      captions: [{ angle: '...', hook: '...', caption: '...', hashtags: ['#KayaJewels', '#RoshniEdit'], cta: '...', image_idea: '...' }],\n    },\n  }),\n\n  reel_ideas: () => ({\n    maxTokens: 2500,\n    prompt: [\n      `Write 3 short vertical video (Instagram Reel) ideas for the ${B.collection_name} launch.`,\n      'Use these 3 angles, one each: 1) making-of in the Jaipur studio, 2) styling one product three ways for Diwali, 3) unboxing the gift box.',\n      'For each idea:',\n      '- title: a short internal name.',\n      '- hook: what is said or shown in the first 2 seconds, at most 12 words.',\n      '- shot_list: 4 to 7 shots, each a short instruction a phone videographer can follow (what to film, close-up or wide, the action).',\n      '- caption: the reel caption, 40 to 100 words, ending with the waitlist call to action (link in bio). No hashtags inside the caption.',\n      '- hashtags: 5 to 10 hashtags including #KayaJewels and #RoshniEdit.',\n      '- audio_idea: the mood or type of audio to use. Do not name copyrighted songs.',\n      '- duration_seconds: a whole number from 15 to 45.',\n    ].join('\\n'),\n    schema: obj({\n      reels: list(obj({\n        title: str('Short internal name'),\n        hook: str('First 2 seconds, max 12 words'),\n        shot_list: list({ type: 'STRING' }, 4, 7),\n        caption: str('Reel caption, 40-100 words'),\n        hashtags: list({ type: 'STRING' }, 5, 10),\n        audio_idea: str('Audio mood'),\n        duration_seconds: { type: 'INTEGER', description: '15 to 45' },\n      }), 3, 3),\n    }),\n    example: {\n      reels: [{ title: '...', hook: '...', shot_list: ['...', '...', '...', '...'], caption: '...', hashtags: ['#KayaJewels', '#RoshniEdit'], audio_idea: '...', duration_seconds: 30 }],\n    },\n  }),\n\n  newsletter: () => ({\n    maxTokens: 2500,\n    prompt: [\n      `Write one email newsletter to people already on the waitlist. It builds excitement for ${B.collection_name} and reminds them that early access is reserved for them.`,\n      '- subject: at most 60 characters, no ALL CAPS words, at most 1 emoji.',\n      '- preview_text: 60 to 110 characters, shown after the subject in the inbox.',\n      '- html_body: a simple HTML email body of 150 to 300 words. Use only <p>, <h2>, <ul>, <li>, <strong>, <em>, <a> and <br>. No <html>, <head>, <body>, <style>, images, classes or scripts.',\n      '  - The very first element must be exactly: <p>Hi {{first_name}},</p>',\n      '  - Mention at least 2 products with their exact prices, the early-access dates and the waitlist offer.',\n      `  - Include one link inviting them to share the waitlist with a friend: <a href=\"${B.waitlist_form_url}\">Share the waitlist with a friend</a>`,\n      '  - The very last element must be exactly: <p>{{unsubscribe_line}}</p>',\n      '  - Keep {{first_name}} and {{unsubscribe_line}} exactly as written; they are filled in later.',\n    ].join('\\n'),\n    schema: obj({\n      subject: str('Max 60 characters'),\n      preview_text: str('60-110 characters'),\n      html_body: str('Simple HTML body, 150-300 words'),\n    }),\n    example: { subject: '...', preview_text: '...', html_body: '<p>Hi {{first_name}},</p>...<p>{{unsubscribe_line}}</p>' },\n  }),\n\n  blog_repurpose: () => {\n    const blog = findBlog();\n    const source = blog\n      ? `BLOG ARTICLE TO REPURPOSE\\n${blog.article_markdown}`\n      : `The blog article failed, so base the posts on the facts about ${B.collection_name} instead.`;\n    return {\n      maxTokens: 2000,\n      prompt: [\n        'Repurpose the blog article below into 3 short social posts (Instagram stories, Threads or WhatsApp status style).',\n        'Each post takes a different idea from the article and must make sense on its own.',\n        'For each post:',\n        '- angle: 3 to 6 words naming the idea.',\n        '- text: at most 280 characters including emojis, ending with a short call to action such as \"Waitlist link in bio\".',\n        '- hashtags: 2 to 4 hashtags including #RoshniEdit.',\n        'Use only information that is in the article AND in the facts.',\n        '',\n        source,\n      ].join('\\n'),\n      schema: obj({\n        short_posts: list(obj({\n          angle: str('3-6 words'),\n          text: str('Max 280 characters'),\n          hashtags: list({ type: 'STRING' }, 2, 4),\n        }), 3, 3),\n      }),\n      example: { short_posts: [{ angle: '...', text: '...', hashtags: ['#RoshniEdit', '#KayaJewels'] }] },\n    };\n  },\n};\n\nif (!JOBS[job.job_type]) throw new Error(`Unknown job_type: ${job.job_type}`);\nconst spec = JOBS[job.job_type]();\nconst temperature = Number(S.AI_TEMPERATURE);\n// Gemini 2.5 models \"think\" before answering, and thinking tokens count against maxOutputTokens.\n// A cap keeps room for the answer. Blank setting = do not send it (models without thinking reject it).\nconst thinkingBudget = String(S.GEMINI_THINKING_BUDGET ?? '').trim();\n\nreturn [{\n  json: {\n    ...job,\n    gemini_model: String(S.GEMINI_MODEL).replace(/^models\\//, ''),\n    groq_model: S.GROQ_MODEL,\n    started_at: Date.now(),\n    // Gemini generateContent body: JSON mode + schema = the answer is always valid JSON.\n    gemini_body: {\n      systemInstruction: { parts: [{ text: system }] },\n      contents: [{ role: 'user', parts: [{ text: spec.prompt }] }],\n      generationConfig: {\n        temperature: Number.isFinite(temperature) ? temperature : 0.7,\n        maxOutputTokens: 8192,\n        responseMimeType: 'application/json',\n        responseSchema: spec.schema,\n        ...(thinkingBudget !== '' && Number.isFinite(Number(thinkingBudget)) ? { thinkingConfig: { thinkingBudget: Number(thinkingBudget) } } : {}),\n      },\n    },\n    // Groq (OpenAI-compatible) body: JSON mode + an example of the expected shape.\n    groq_body: {\n      model: S.GROQ_MODEL,\n      temperature: Number.isFinite(temperature) ? temperature : 0.7,\n      max_tokens: spec.maxTokens,\n      response_format: { type: 'json_object' },\n      messages: [\n        {\n          role: 'system',\n          content: `${system}\\n\\nOUTPUT FORMAT\\nReturn ONLY one JSON object with exactly this shape (same keys, same types; arrays must have the requested number of entries):\\n${JSON.stringify(spec.example)}`,\n        },\n        { role: 'user', content: spec.prompt },\n      ],\n    },\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        620
+      ],
+      "id": "66a14cdd-3b91-537d-9625-dfa970132659",
+      "name": "Lane 1 · Build AI request",
+      "notes": "Prompt + Gemini/Groq bodies",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.gemini_model }}:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gemini_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        620
+      ],
+      "id": "31d719a1-a8db-575a-abb9-57ba576c9c1a",
+      "name": "Lane 1 · Ask Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "",
+          "name": "Kaya Demo · Gemini"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "notes": "Main AI · 3 tries",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull the answer text out of Gemini's response. If the HTTP call failed (after its retries),\n// the item only has an \"error\" field; we pass that on so the check can switch to Groq.\nconst request = $('Lane 1 · Build AI request').first().json;\nconst response = $input.first().json;\n\nlet text = '';\nlet error = '';\nif (response.error) {\n  const { message, description } = response.error;\n  const detail = [message, description].filter(Boolean).join(' - ') || JSON.stringify(response.error);\n  error = `Gemini call failed: ${String(detail).slice(0, 300)}`;\n} else {\n  const candidate = (response.candidates || [])[0];\n  const parts = candidate?.content?.parts || [];\n  // Skip \"thought\" parts that thinking models may add; keep only the answer text.\n  text = parts.filter((part) => !part.thought && typeof part.text === 'string').map((part) => part.text).join('');\n  const finish = candidate?.finishReason || response.promptFeedback?.blockReason || 'unknown';\n  if (!text) error = `Gemini returned no text (reason: ${finish})`;\n  else if (finish !== 'STOP') error = `Gemini stopped early (reason: ${finish})`;\n}\n\nreturn [{ json: { provider: 'gemini', model: request.gemini_model, text, error, fallback_reason: '' } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        620
+      ],
+      "id": "0ab91400-68f1-5f5a-93aa-8349ff7330eb",
+      "name": "Lane 1 · Read Gemini reply",
+      "notes": "Answer text or error",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same check for both providers: is the answer valid JSON with everything we asked for?\n// If Gemini's answer is not usable, try_groq = true sends the job to the Groq fallback.\nconst S = $('Lane 1 · Settings to object').first().json;\nconst request = $('Lane 1 · Build AI request').first().json;\nconst reply = $input.first().json;\n\nfunction parseJson(text) {\n  let clean = String(text || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  const start = clean.indexOf('{');\n  const end = clean.lastIndexOf('}');\n  if (start !== -1 && end > start) clean = clean.slice(start, end + 1);\n  return JSON.parse(clean);\n}\n\nconst filled = (value) => String(value ?? '').trim() !== '';\nconst countFilled = (list, field) => (Array.isArray(list) ? list.filter((entry) => entry && filled(entry[field])).length : 0);\n\n// Minimum shape per job. Finer quality rules live in \"SEO & quality checks\".\nconst RULES = {\n  blog_article: (data) => {\n    const problems = ['target_keyword', 'seo_title', 'meta_description', 'slug', 'article_markdown']\n      .filter((field) => !filled(data[field])).map((field) => `missing ${field}`);\n    if (String(data.article_markdown || '').split(/\\s+/).length < 300) problems.push('article is far too short');\n    return problems;\n  },\n  ig_captions: (data) => (countFilled(data.captions, 'caption') >= 5 ? [] : ['needs 5 captions']),\n  reel_ideas: (data) => (countFilled(data.reels, 'hook') >= 3 ? [] : ['needs 3 reel ideas']),\n  newsletter: (data) => ['subject', 'preview_text', 'html_body'].filter((field) => !filled(data[field])).map((field) => `missing ${field}`),\n  blog_repurpose: (data) => (countFilled(data.short_posts, 'text') >= 3 ? [] : ['needs 3 short posts']),\n};\n\nlet data = null;\nlet error = reply.error || '';\nif (!error) {\n  try {\n    data = parseJson(reply.text);\n  } catch (parseError) {\n    error = `${reply.provider} answer is not valid JSON: ${parseError.message}`;\n  }\n}\nif (!error) {\n  const problems = RULES[request.job_type](data);\n  if (problems.length) error = `${reply.provider} answer is incomplete: ${problems.join(', ')}`;\n}\n\nconst ok = !error;\nconst tryGroq = !ok && reply.provider === 'gemini';\nreturn [{\n  json: {\n    batch_id: request.batch_id,\n    job_no: request.job_no,\n    job_type: request.job_type,\n    label: request.label,\n    request_id: request.request_id,\n    ai_ok: ok,\n    ai_provider: reply.provider,\n    ai_model: reply.model,\n    ai_error: error,\n    fallback_reason: reply.fallback_reason || '',\n    try_groq: tryGroq,\n    duration_ms: Date.now() - request.started_at,\n    ai_data: ok ? data : null,\n    // Handed to the next nodes so their settings stay simple: {{ $json.groq_body }} / {{ $json.pause_seconds }}\n    groq_body: tryGroq ? request.groq_body : null,\n    pause_seconds: Math.max(0, Number(S.AI_WAIT_SECONDS) || 6),\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2260,
+        620
+      ],
+      "id": "171d1435-d7d5-5a9a-9c6e-54cdc6213db3",
+      "name": "Lane 1 · Check AI answer",
+      "notes": "Valid JSON? Complete?",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9ebd15b8-2337-53a1-a299-b915c7e99338",
+              "leftValue": "={{ $json.try_groq }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2480,
+        620
+      ],
+      "id": "0b8c2a3a-e366-525c-814a-d455dafd65a2",
+      "name": "Lane 1 · Need Groq fallback?",
+      "notes": "true = Gemini failed",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.groq_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2700,
+        500
+      ],
+      "id": "7aedfedb-5db0-5000-a99c-32ac0fd1d709",
+      "name": "Lane 1 · Ask Groq (fallback)",
+      "credentials": {
+        "groqApi": {
+          "id": "",
+          "name": "Kaya Demo · Groq"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "notes": "Fallback AI · 3 tries",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull the answer text out of Groq's (OpenAI-style) response, and remember why we fell back.\nconst request = $('Lane 1 · Build AI request').first().json;\nconst response = $input.first().json;\n// The item that the IF node sent down its \"true\" branch carries Gemini's error.\nconst fallbackReason = $('Lane 1 · Need Groq fallback?').first(0)?.json?.ai_error || '';\n\nlet text = '';\nlet error = '';\nif (response.error) {\n  const { message, description } = response.error;\n  const detail = [message, description].filter(Boolean).join(' - ') || JSON.stringify(response.error);\n  error = `Groq call failed: ${String(detail).slice(0, 300)}`;\n} else {\n  const choice = (response.choices || [])[0];\n  text = choice?.message?.content || '';\n  if (!text) error = `Groq returned no text (reason: ${choice?.finish_reason || 'unknown'})`;\n}\n\nreturn [{ json: { provider: 'groq', model: request.groq_model, text, error, fallback_reason: fallbackReason } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2920,
+        500
+      ],
+      "id": "51917af4-1198-5d43-8a0f-745942b1d7b6",
+      "name": "Lane 1 · Read Groq reply",
+      "notes": "Answer text or error",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.pause_seconds }}",
+        "unit": "seconds"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2700,
+        760
+      ],
+      "id": "9cc69692-1347-5ab5-a9c5-15d57f069658",
+      "name": "Lane 1 · Pause between AI calls",
+      "webhookId": "bb85f866-f5ea-5017-b230-e4fd85f4ef96",
+      "notes": "AI_WAIT_SECONDS",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// The loop is finished: one item per AI job. Split each answer into CONTENT rows:\n// 1 blog + 5 captions + 3 reel ideas + 1 newsletter + 3 short posts = 13 rows when all jobs work.\nconst B = $('Lane 1 · Build brief facts').first().json;\nconst results = $input.all().map((item) => item.json);\n\nconst text = (value) => String(value ?? '').trim();\nconst hashtags = (value) => (Array.isArray(value) ? value : text(value).split(/[\\s,]+/))\n  .map((tag) => text(tag).replace(/\\s+/g, ''))\n  .filter(Boolean)\n  .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))\n  .join(' ');\nconst slugify = (value) => text(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\n\nconst rows = [];\nfor (const result of results) {\n  if (!result.ai_ok) continue;\n  const data = result.ai_data;\n  const base = { ai_provider: result.ai_provider, seo_title: '', meta_description: '', slug: '', target_keyword: '', hashtags: '', cta: '', media_notes: '' };\n\n  if (result.job_type === 'blog_article') {\n    const markdown = text(data.article_markdown);\n    const h1 = (markdown.match(/^#\\s+(.+)$/m) || [])[1];\n    rows.push({\n      ...base,\n      asset_type: 'blog_article',\n      channel: 'blog',\n      title: text(h1 || data.seo_title),\n      body: markdown,\n      cta: `Join the waitlist: ${B.waitlist_form_url}`,\n      seo_title: text(data.seo_title),\n      meta_description: text(data.meta_description),\n      slug: slugify(data.slug || data.target_keyword),\n      target_keyword: text(data.target_keyword).toLowerCase(),\n    });\n  }\n\n  if (result.job_type === 'ig_captions') {\n    for (const caption of data.captions.slice(0, 5)) {\n      rows.push({\n        ...base,\n        asset_type: 'ig_caption',\n        channel: 'instagram',\n        title: text(caption.hook) || text(caption.caption).split('\\n')[0],\n        body: text(caption.caption),\n        hashtags: hashtags(caption.hashtags),\n        cta: text(caption.cta),\n        media_notes: text(caption.image_idea),\n      });\n    }\n  }\n\n  if (result.job_type === 'reel_ideas') {\n    for (const reel of data.reels.slice(0, 3)) {\n      const shots = (Array.isArray(reel.shot_list) ? reel.shot_list : []).map((shot, index) => `${index + 1}. ${text(shot)}`);\n      rows.push({\n        ...base,\n        asset_type: 'reel_idea',\n        channel: 'reels',\n        title: text(reel.title),\n        body: text(reel.caption),\n        hashtags: hashtags(reel.hashtags),\n        cta: 'Waitlist link in bio',\n        media_notes: [\n          `Hook: ${text(reel.hook)}`,\n          'Shots:',\n          ...shots,\n          `Audio: ${text(reel.audio_idea)}`,\n          `Length: ${Number(reel.duration_seconds) || ''} seconds`,\n        ].join('\\n'),\n      });\n    }\n  }\n\n  if (result.job_type === 'newsletter') {\n    rows.push({\n      ...base,\n      asset_type: 'newsletter',\n      channel: 'email',\n      title: text(data.subject),\n      body: text(data.html_body),\n      cta: 'Share the waitlist with a friend',\n      meta_description: text(data.preview_text), // for newsletters this column holds the inbox preview text\n    });\n  }\n\n  if (result.job_type === 'blog_repurpose') {\n    for (const post of data.short_posts.slice(0, 3)) {\n      rows.push({\n        ...base,\n        asset_type: 'short_post',\n        channel: 'instagram',\n        title: text(post.angle),\n        body: text(post.text),\n        hashtags: hashtags(post.hashtags),\n        cta: 'Waitlist link in bio',\n      });\n    }\n  }\n}\n\nif (!rows.length) {\n  const reasons = results.map((result) => `${result.job_type}: ${result.ai_error}`).join(' | ');\n  throw new Error(`Every AI job failed, so there is nothing to save. ${reasons}`);\n}\nreturn rows.map((json) => ({ json }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        280
+      ],
+      "id": "9c3c317a-e98e-5840-9031-ed9a944f4cfb",
+      "name": "Lane 1 · Turn answers into content rows",
+      "notes": "AI answers → 13 rows",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Score every row 0-100 and list its problems, so a human can approve quickly.\n// Blog = SEO checks. Other assets = format checks. Every asset also gets a fact check\n// against the BRIEF; each fact problem costs 10 points and is listed first, marked \"FACT:\".\nconst B = $('Lane 1 · Build brief facts').first().json;\n\n// ---------- small helpers\nconst lower = (value) => String(value ?? '').toLowerCase();\nconst wordsOf = (value) => String(value ?? '').split(/\\s+/).filter((word) => /[\\p{L}\\p{N}]/u.test(word));\nconst hasCta = (value) => /waitlist|link in bio/i.test(String(value));\nconst countEmojis = (value) => (String(value).match(/\\p{Extended_Pictographic}/gu) || []).length;\nconst tagList = (value) => String(value ?? '').split(/\\s+/).filter(Boolean);\n\nfunction stripMarkdown(markdown) {\n  return String(markdown)\n    .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, ' ')\n    .replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, '$1')\n    .replace(/^#{1,6}\\s+/gm, '')\n    .replace(/^\\s*(?:[-*+]|\\d+\\.)\\s+/gm, '')\n    .replace(/[*_`>]/g, '');\n}\nconst stripHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');\n\n// Flesch reading ease: 60+ is easy, 50-60 fairly easy, below 50 hard.\nfunction syllables(word) {\n  const clean = word.toLowerCase().replace(/[^a-z]/g, '');\n  if (!clean) return 0;\n  if (clean.length <= 3) return 1;\n  const groups = clean.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g);\n  return Math.max(1, groups ? groups.length : 1);\n}\nfunction readability(plain) {\n  const words = wordsOf(plain);\n  const sentences = String(plain).split(/[.!?]+(?=\\s|$)/).filter((sentence) => wordsOf(sentence).length > 0);\n  const avgSentence = words.length / Math.max(sentences.length, 1);\n  const avgSyllables = words.reduce((sum, word) => sum + syllables(word), 0) / Math.max(words.length, 1);\n  return { avgSentence, flesch: 206.835 - 1.015 * avgSentence - 84.6 * avgSyllables };\n}\n\n// checks = [[points, passed, problem text], ...] -> { score, issues }\nfunction grade(checks) {\n  const total = checks.reduce((sum, [points]) => sum + points, 0);\n  const earned = checks.reduce((sum, [points, passed]) => sum + (passed ? points : 0), 0);\n  return { score: Math.round((earned / total) * 100), issues: checks.filter(([, passed]) => !passed).map(([, , problem]) => problem) };\n}\n\n// ---------- fact check (all assets)\nfunction factIssues(row) {\n  const all = [row.title, row.body, row.cta, row.media_notes, row.seo_title, row.meta_description, row.hashtags].join('\\n');\n  const text = lower(all);\n  const issues = [];\n  for (const phrase of B.forbidden_phrases) {\n    if (text.includes(phrase)) issues.push(`FACT: uses the forbidden phrase \"${phrase}\"`);\n  }\n  for (const price of all.match(/(?:₹|\\brs\\.?|\\binr)\\s?\\d[\\d,]*/gi) || []) {\n    if (!B.allowed_prices.includes(Number(price.replace(/[^\\d]/g, '')))) issues.push(`FACT: price ${price.trim()} is not in the brief`);\n  }\n  for (const percent of all.match(/\\d+(?:\\.\\d+)?\\s?%/g) || []) {\n    if (!B.allowed_percents.includes(Number(percent.replace(/[^\\d.]/g, '')))) issues.push(`FACT: \"${percent}\" is not in the brief`);\n  }\n  if (B.offer_code && text.includes(lower(B.offer_code))) issues.push('FACT: reveals the discount code before launch');\n  return [...new Set(issues)];\n}\n\n// ---------- per asset type\nfunction blogChecks(row) {\n  const markdown = row.body;\n  const keyword = lower(row.target_keyword).trim();\n  const headings = markdown.split('\\n')\n    .map((line) => line.trim().match(/^(#{1,6})\\s+(.*)$/))\n    .filter(Boolean)\n    .map((match) => ({ level: match[1].length, text: match[2] }));\n  const h1 = headings.filter((heading) => heading.level === 1);\n  const h2 = headings.filter((heading) => heading.level === 2);\n  const skipsLevel = headings.some((heading, index) => index > 0 && heading.level > headings[index - 1].level + 1);\n  const firstParagraph = markdown.split(/\\n\\s*\\n/).map((block) => block.trim()).find((block) => block && !block.startsWith('#')) || '';\n  const plain = stripMarkdown(markdown);\n  const wordCount = wordsOf(plain).length;\n  const { avgSentence, flesch } = readability(plain);\n  const keywordHits = keyword ? lower(plain).split(keyword).length - 1 : 0;\n  const density = wordCount ? ((keywordHits * keyword.split(/\\s+/).length) / wordCount) * 100 : 0;\n  const titleLength = row.seo_title.length;\n  const metaLength = row.meta_description.length;\n  const keywordWords = keyword.split(/\\s+/).filter((word) => word.length > 3);\n  const slugOk = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(row.slug) && row.slug.length <= 60 && keywordWords.every((word) => row.slug.includes(word));\n\n  const result = grade([\n    [10, titleLength > 0 && titleLength <= 60, `SEO title is ${titleLength} characters (max 60)`],\n    [10, metaLength >= 120 && metaLength <= 155, `Meta description is ${metaLength} characters (aim for 120-155)`],\n    [15, !!keyword && lower(row.seo_title).includes(keyword), 'Target keyword is missing from the SEO title'],\n    [5, !!keyword && lower(row.meta_description).includes(keyword), 'Target keyword is missing from the meta description'],\n    [10, !!keyword && lower(stripMarkdown(firstParagraph)).includes(keyword), 'Target keyword is missing from the first paragraph'],\n    [10, !!keyword && h2.some((heading) => lower(heading.text).includes(keyword)), 'Target keyword is not in any H2 heading'],\n    [10, h1.length === 1 && headings[0]?.level === 1 && h2.length >= 3 && !skipsLevel,\n      `Heading structure needs 1 H1 first, 3+ H2 and no skipped levels (found ${h1.length} H1, ${h2.length} H2${skipsLevel ? ', a skipped level' : ''})`],\n    [10, wordCount >= 600 && wordCount <= 900, `Article is ${wordCount} words (aim for 600-900)`],\n    [10, flesch >= 50 && avgSentence <= 20, `Readability: Flesch score ${flesch.toFixed(0)} (aim for 50+), ${avgSentence.toFixed(1)} words per sentence (aim for 20 or fewer)`],\n    [5, density >= 0.5 && density <= 2.5, `Keyword density is ${density.toFixed(1)}% (aim for 0.5-2.5%)`],\n    [5, slugOk, `Slug \"${row.slug}\" should be lowercase-with-hyphens, max 60 characters, and contain the keyword`],\n  ]);\n  if (keyword && !B.seo_keywords.map(lower).includes(keyword)) {\n    result.issues.push('Target keyword is not one of the BRIEF seo_keywords (no points lost)');\n  }\n  return result;\n}\n\nfunction captionChecks(row) {\n  const firstLine = row.body.split('\\n')[0];\n  const words = wordsOf(row.body).length;\n  const tags = tagList(row.hashtags).map(lower);\n  const emojis = countEmojis(row.body);\n  return grade([\n    [20, firstLine.length <= 125, `Hook (first line) is ${firstLine.length} characters (max 125 shows before \"more\")`],\n    [10, row.body.length <= 2200, `Caption is ${row.body.length} characters (Instagram max is 2,200)`],\n    [15, words >= 40 && words <= 180, `Caption is ${words} words (aim for 60-150)`],\n    [10, tags.length >= 5 && tags.length <= 15, `${tags.length} hashtags (aim for 8-12, max 15)`],\n    [10, tags.includes('#kayajewels') && tags.includes('#roshniedit'), 'Missing #KayaJewels or #RoshniEdit'],\n    [20, hasCta(row.body), 'No waitlist call to action (\"waitlist\" or \"link in bio\") in the caption'],\n    [10, emojis <= 3, `${emojis} emojis (the brief allows 3)`],\n    [5, !/#[\\p{L}\\p{N}]/u.test(row.body), 'Hashtags inside the caption text (keep them in the hashtags column)'],\n  ]);\n}\n\nfunction reelChecks(row) {\n  const notes = row.media_notes;\n  const hookWords = wordsOf((notes.match(/^Hook: (.*)$/m) || [])[1]).length;\n  const shots = (notes.match(/^\\d+\\. /gm) || []).length;\n  const seconds = Number((notes.match(/^Length: (\\d+)/m) || [])[1]);\n  const audio = ((notes.match(/^Audio: (.*)$/m) || [])[1] || '').trim();\n  const words = wordsOf(row.body).length;\n  const tags = tagList(row.hashtags);\n  return grade([\n    [20, hookWords > 0 && hookWords <= 12, `Hook is ${hookWords} words (max 12)`],\n    [20, shots >= 4 && shots <= 7, `${shots} shots in the shot list (aim for 4-7)`],\n    [10, seconds >= 15 && seconds <= 45, `Length is ${seconds || 'unknown'} seconds (aim for 15-45)`],\n    [15, words >= 30 && words <= 120, `Reel caption is ${words} words (aim for 40-100)`],\n    [15, hasCta(row.body), 'No waitlist call to action in the reel caption'],\n    [10, tags.length >= 5 && tags.length <= 10, `${tags.length} hashtags (aim for 5-10)`],\n    [10, audio.length > 0, 'No audio idea'],\n  ]);\n}\n\nfunction newsletterChecks(row) {\n  const html = row.body;\n  const words = wordsOf(stripHtml(html)).length;\n  return grade([\n    [15, row.title.length > 0 && row.title.length <= 60, `Subject is ${row.title.length} characters (max 60)`],\n    [10, row.meta_description.length >= 40 && row.meta_description.length <= 140, `Preview text is ${row.meta_description.length} characters (aim for 60-110)`],\n    [15, html.includes('{{first_name}}'), 'Missing the {{first_name}} placeholder'],\n    [15, html.includes('{{unsubscribe_line}}'), 'Missing the {{unsubscribe_line}} placeholder'],\n    [15, html.includes(B.waitlist_form_url), 'No link to the waitlist form'],\n    [15, words >= 120 && words <= 350, `Body is ${words} words (aim for 150-300)`],\n    [15, !/<\\s*(script|style|html|head|body|img|iframe)\\b/i.test(html), 'Body uses tags that are not allowed (script, style, html, head, body, img, iframe)'],\n  ]);\n}\n\nfunction shortPostChecks(row) {\n  const characters = [...row.body].length;\n  const tags = tagList(row.hashtags);\n  return grade([\n    [40, characters <= 280, `Post is ${characters} characters (max 280)`],\n    [30, hasCta(row.body), 'No waitlist call to action'],\n    [30, tags.length >= 2 && tags.length <= 4, `${tags.length} hashtags (aim for 2-4)`],\n  ]);\n}\n\nconst CHECKS = {\n  blog_article: blogChecks,\n  ig_caption: captionChecks,\n  reel_idea: reelChecks,\n  newsletter: newsletterChecks,\n  short_post: shortPostChecks,\n};\n\nreturn $input.all().map((item) => {\n  const row = item.json;\n  const quality = CHECKS[row.asset_type](row);\n  const facts = factIssues(row);\n  return {\n    json: {\n      ...row,\n      seo_score: Math.max(0, quality.score - 10 * facts.length),\n      issues: [...facts, ...quality.issues].join(' | '),\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        280
+      ],
+      "id": "52516e84-6c78-5f9b-a49d-4e7edb73ce3a",
+      "name": "Lane 1 · SEO & quality checks",
+      "notes": "Score + issues",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Give every row an ID and a posting slot, then shape it into the exact CONTENT columns.\n// Real mode: slots are POST_TIMES on the days after the run (from CONTENT_START_IN_DAYS on).\n// Demo mode: the same calendar, squeezed so 1 day = DEMO_MINUTES_PER_DAY real minutes.\nconst S = $('Lane 1 · Settings to object').first().json;\nconst batchId = $('Lane 1 · List asset jobs').first().json.batch_id;\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ).startOf('second');\nconst rows = $input.all().map((item) => item.json);\n\n// Calendar order: mix the formats so the feed never shows the same type three times in a row.\nconst ORDER = [\n  'blog_article', 'ig_caption', 'newsletter', 'ig_caption', 'reel_idea', 'short_post', 'ig_caption',\n  'short_post', 'reel_idea', 'ig_caption', 'short_post', 'ig_caption', 'reel_idea',\n];\nconst queues = {};\nfor (const row of rows) (queues[row.asset_type] = queues[row.asset_type] || []).push(row);\nconst ordered = [];\nfor (const type of ORDER) if (queues[type]?.length) ordered.push(queues[type].shift());\nfor (const type of Object.keys(queues)) ordered.push(...queues[type]); // anything left over goes last\n\n// Posting slots\nconst times = String(S.POST_TIMES).split(',').map((time) => time.trim()).filter(Boolean).sort();\nif (!times.length) throw new Error('SETTINGS POST_TIMES needs at least one time, e.g. 11:00,19:00');\nconst startDays = Number(S.CONTENT_START_IN_DAYS) || 0;\nconst demoFactor = S.IS_DEMO ? Number(S.DEMO_MINUTES_PER_DAY) / (24 * 60) : 1;\nfunction slot(index) {\n  const [hour, minute] = times[index % times.length].split(':').map(Number);\n  const real = now.startOf('day').plus({ days: startDays + Math.floor(index / times.length) }).set({ hour, minute });\n  if (!S.IS_DEMO) return real;\n  // Demo clock: keep the same distance from \"now\", just shorter (SPEC section 5.3).\n  return now.plus({ milliseconds: Math.max(0, real.toMillis() - now.toMillis()) * demoFactor }).startOf('second');\n}\n\nconst idFor = (index) => `CNT-${batchId.slice(2)}-${String(index + 1).padStart(2, '0')}`;\nconst blogIndex = ordered.findIndex((row) => row.asset_type === 'blog_article');\nconst created = now.toFormat(STAMP);\n\nreturn ordered.map((row, index) => ({\n  json: {\n    content_id: idFor(index),\n    batch_id: batchId,\n    created_at: created,\n    asset_type: row.asset_type,\n    channel: row.channel,\n    title: row.title,\n    body: row.body,\n    hashtags: row.hashtags,\n    cta: row.cta,\n    media_notes: row.media_notes,\n    seo_title: row.seo_title,\n    meta_description: row.meta_description,\n    slug: row.slug,\n    target_keyword: row.target_keyword,\n    seo_score: row.seo_score,\n    issues: row.issues,\n    scheduled_for: slot(index).toFormat(STAMP),\n    status: 'pending_approval',\n    source_content_id: row.asset_type === 'short_post' && blogIndex !== -1 ? idFor(blogIndex) : '',\n    ai_provider: row.ai_provider,\n    review_notes: '',\n    published_at: '',\n    publish_ref: '',\n    last_error: '',\n    updated_at: created,\n  },\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        280
+      ],
+      "id": "6ff9ef5e-c106-567d-9289-ff2e2da8d698",
+      "name": "Lane 1 · Schedule & assign IDs",
+      "notes": "IDs + scheduled_for",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTENT",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "content_id",
+              "displayName": "content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "batch_id",
+              "displayName": "batch_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "asset_type",
+              "displayName": "asset_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hashtags",
+              "displayName": "hashtags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cta",
+              "displayName": "cta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "media_notes",
+              "displayName": "media_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_title",
+              "displayName": "seo_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_description",
+              "displayName": "meta_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_keyword",
+              "displayName": "target_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seo_score",
+              "displayName": "seo_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scheduled_for",
+              "displayName": "scheduled_for",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_content_id",
+              "displayName": "source_content_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_provider",
+              "displayName": "ai_provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_notes",
+              "displayName": "review_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publish_ref",
+              "displayName": "publish_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2260,
+        280
+      ],
+      "id": "ab867ecd-472c-57ca-9b36-28fba5b48281",
+      "name": "Lane 1 · Save to CONTENT",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append rows",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// One Telegram message to the owner: how many items wait for approval, a short list,\n// and anything that went wrong. Telegram \"HTML\" mode, so user text must be escaped.\nconst S = $('Lane 1 · Settings to object').first().json;\nconst B = $('Lane 1 · Build brief facts').first().json;\nconst rows = $('Lane 1 · Schedule & assign IDs').all().map((item) => item.json);\nconst results = $('Lane 1 · Loop over asset jobs').all(0).map((item) => item.json); // the loop's \"done\" output\nconst TZ = 'Asia/Kolkata';\n\nconst escape = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst shorten = (value, max) => (String(value).length > max ? `${String(value).slice(0, max - 1)}…` : String(value));\nconst LABEL = { blog_article: '📝 Blog', ig_caption: '📸 Caption', reel_idea: '🎬 Reel', newsletter: '💌 Newsletter', short_post: '💬 Short post' };\nconst when = (stamp) => DateTime.fromISO(stamp).setZone(TZ).toFormat(S.IS_DEMO ? 'HH:mm' : 'ccc d LLL, HH:mm');\n\nconst lines = rows.map((row, index) =>\n  `${index + 1}. ${LABEL[row.asset_type] || row.asset_type}: ${escape(shorten(row.title, 55))} · score ${row.seo_score} · ${when(row.scheduled_for)}`);\n\nconst failed = results.filter((result) => !result.ai_ok);\nconst fallbacks = results.filter((result) => result.ai_provider === 'groq');\nconst withIssues = rows.filter((row) => row.issues).length;\nconst factIssues = rows.filter((row) => row.issues.includes('FACT:')).length;\n\nconst header = [\n  `🪔 <b>Content ready for approval: ${rows.length} items</b>`,\n  `<i>${escape(B.campaign_name)} · ${rows[0].batch_id}${S.IS_DEMO ? ` · DEMO MODE (1 day = ${S.DEMO_MINUTES_PER_DAY} min)` : ''}</i>`,\n  '',\n];\nconst footer = [''];\nif (withIssues) footer.push(`⚠️ ${withIssues} item(s) have notes in the <b>issues</b> column${factIssues ? ` (${factIssues} with FACT problems, check these first)` : ''}.`);\nif (fallbacks.length) footer.push(`🔁 Groq fallback used for: ${fallbacks.map((result) => escape(result.label)).join(', ')}.`);\nif (failed.length) footer.push(`❌ Not generated: ${failed.map((result) => escape(result.label)).join(', ')}. Run Lane 1 again later.`);\nfooter.push('Approve in the CONTENT tab: set <b>status</b> to <code>approved</code>, <code>rejected</code> or <code>needs_changes</code>.');\nif (S.SHEET_URL && !String(S.SHEET_URL).includes('__KAYA_SHEET_ID__')) footer.push(`<a href=\"${escape(S.SHEET_URL)}\">Open the sheet</a>`);\n\n// Telegram allows 4,096 characters: keep whole lines only (never cut through an HTML tag).\nconst budget = 3900 - header.join('\\n').length - footer.join('\\n').length;\nconst list = [];\nlet used = 0;\nfor (const line of lines) {\n  if (used + line.length + 1 > budget) {\n    list.push(`…and ${lines.length - list.length} more in the sheet`);\n    break;\n  }\n  list.push(line);\n  used += line.length + 1;\n}\n\nconst text = [...header, ...list, ...footer].join('\\n');\nreturn [{ json: { chat_id: String(S.TELEGRAM_OWNER_CHAT_ID), text, item_count: rows.length } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        280
+      ],
+      "id": "3bec03a5-01b5-5978-80c3-55294b2066a4",
+      "name": "Lane 1 · Build approval message",
+      "notes": "Telegram text",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2700,
+        280
+      ],
+      "id": "6925d77a-5171-5ade-84cd-82b8d365e208",
+      "name": "Lane 1 · Telegram me for approval",
+      "webhookId": "8cd1479c-ea97-5a74-9d8f-97464e0c03d3",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Kaya Demo · Telegram Bot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "notes": "To TELEGRAM_OWNER_CHAT_ID",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Write what happened to EVENTS_LOG (SPEC section 5.6), so Lane 8 can report on it:\n// one row per content item, one per AI job (+ fallback / failure rows), the approval request\n// and a run summary.\nconst S = $('Lane 1 · Settings to object').first().json;\nconst rows = $('Lane 1 · Schedule & assign IDs').all().map((item) => item.json);\nconst results = $('Lane 1 · Loop over asset jobs').all(0).map((item) => item.json);\nconst telegram = $input.first().json;\nconst TZ = 'Asia/Kolkata';\nconst LANE = 1;\n\nconst now = $now.setZone(TZ);\nconst stamp = now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\");\nconst usedIds = new Set();\nfunction eventId() {\n  let id;\n  do {\n    id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`;\n  } while (usedIds.has(id));\n  usedIds.add(id);\n  return id;\n}\nfunction event(fields) {\n  return {\n    event_id: eventId(),\n    ts: stamp,\n    lane: LANE,\n    event_type: fields.event_type,\n    entity_type: fields.entity_type,\n    entity_id: fields.entity_id || '',\n    status_from: fields.status_from || '',\n    status_to: fields.status_to || '',\n    channel: fields.channel || '',\n    detail: String(fields.detail || '').slice(0, 200),\n    meta_json: JSON.stringify(fields.meta || {}),\n    execution_id: String($execution.id),\n    demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\n\nconst batchId = rows[0].batch_id;\nconst events = [];\n\nfor (const row of rows) {\n  events.push(event({\n    event_type: 'content_generated', entity_type: 'content', entity_id: row.content_id,\n    status_to: 'pending_approval', channel: 'sheet',\n    detail: `${row.asset_type}: ${row.title}`,\n    meta: { batch_id: batchId, asset_type: row.asset_type, seo_score: row.seo_score, issue_count: row.issues ? row.issues.split(' | ').length : 0, ai_provider: row.ai_provider, scheduled_for: row.scheduled_for },\n  }));\n}\n\nfor (const result of results) {\n  const meta = { batch_id: batchId, job_type: result.job_type, provider: result.ai_provider, model: result.ai_model, ok: result.ai_ok, duration_ms: result.duration_ms };\n  events.push(event({\n    event_type: 'ai_call', entity_type: 'ai', entity_id: result.request_id, channel: 'ai',\n    detail: `${result.label}: ${result.ai_ok ? 'ok' : 'failed'} via ${result.ai_provider}`, meta,\n  }));\n  if (result.ai_provider === 'groq') {\n    events.push(event({\n      event_type: 'ai_fallback', entity_type: 'ai', entity_id: result.request_id, channel: 'ai',\n      detail: `Gemini failed, used Groq: ${result.fallback_reason}`, meta: { ...meta, reason: result.fallback_reason },\n    }));\n  }\n  if (!result.ai_ok) {\n    events.push(event({\n      event_type: 'ai_failed', entity_type: 'ai', entity_id: result.request_id, channel: 'ai',\n      detail: result.ai_error, meta: { ...meta, error: result.ai_error },\n    }));\n  }\n}\n\nconst telegramOk = !telegram.error && (telegram.ok === true || !!telegram.result || !!telegram.message_id);\nevents.push(event({\n  event_type: 'approval_requested', entity_type: 'batch', entity_id: batchId, channel: 'telegram_owner',\n  detail: telegramOk ? `Asked the owner to approve ${rows.length} items` : `Telegram message failed: ${telegram.error?.message || 'unknown error'}`,\n  meta: { items: rows.length, telegram_ok: telegramOk },\n}));\n\nconst startedAt = DateTime.fromFormat(batchId.slice(2), 'yyyyMMdd-HHmmss', { zone: TZ }); // batch id = run start\nevents.push(event({\n  event_type: 'lane_run', entity_type: 'system', entity_id: batchId, channel: 'sheet',\n  detail: `Lane 1 created ${rows.length} items, ${results.filter((result) => !result.ai_ok).length} AI job(s) failed`,\n  meta: {\n    items_created: rows.length,\n    ai_jobs: results.length,\n    ai_failed: results.filter((result) => !result.ai_ok).length,\n    ai_fallbacks: results.filter((result) => result.ai_provider === 'groq').length,\n    duration_seconds: Math.round(now.diff(startedAt, 'seconds').seconds),\n  },\n}));\n\nreturn events.map((json) => ({ json }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2920,
+        280
+      ],
+      "id": "e699b985-03da-52db-8933-2f7110fd3277",
+      "name": "Lane 1 · Build log events",
+      "notes": "EVENTS_LOG rows",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3140,
+        280
+      ],
+      "id": "f8882018-e909-559e-aafd-165b433ba626",
+      "name": "Lane 1 · Save to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append events",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "Lane 1 · Start": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Read SETTINGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Read SETTINGS": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Settings to object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Settings to object": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Read BRIEF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Read BRIEF": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Build brief facts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Build brief facts": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · List asset jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · List asset jobs": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Loop over asset jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Loop over asset jobs": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Turn answers into content rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 1 · Build AI request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Build AI request": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Ask Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Ask Gemini": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Read Gemini reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Read Gemini reply": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Check AI answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Check AI answer": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Need Groq fallback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Need Groq fallback?": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Ask Groq (fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 1 · Pause between AI calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Ask Groq (fallback)": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Read Groq reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Read Groq reply": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Check AI answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Pause between AI calls": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Loop over asset jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Turn answers into content rows": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · SEO & quality checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · SEO & quality checks": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Schedule & assign IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Schedule & assign IDs": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Save to CONTENT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Save to CONTENT": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Build approval message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Build approval message": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Telegram me for approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Telegram me for approval": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 1 · Build log events": {
+      "main": [
+        [
+          {
+            "node": "Lane 1 · Save to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

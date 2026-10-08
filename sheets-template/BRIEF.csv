@@ -1,0 +1,39 @@
+key,value,section,ai_use,notes
+brand_name,Kaya Jewels,brand,all,Machine key + fact.
+brand_instagram,@kayajewels_demo,brand,all,Fictional handle for the demo.
+tagline,"Handmade jewellery, made to be celebrated.",brand,consumer,
+founder_name,Kavya Mehra,brand,none,Template placeholder {{founder_name}}.
+founder_story,"Kaya Jewels was started in 2021 by Kavya Mehra at her home in Jaipur, Rajasthan, with two karigars (artisans).",brand,all,
+studio,Today every piece is handmade in our Jaipur studio by a team of 6 women artisans. Each design takes 2 to 4 days to make.,brand,all,
+where_we_sell,We sell on Instagram (order by DM) and through our online store. During this campaign every call to action points to the waitlist form.,brand,all,
+materials,"Our pieces use brass with gold plating, kundan-style glass stones, glass beads, freshwater pearls and hand-painted meenakari enamel. One design uses 925 sterling silver.",product,all,
+collection_name,The Roshni Edit,campaign,all,Machine key + fact.
+collection_story,"The Roshni Edit is our Diwali 2026 collection: 6 handmade designs inspired by diyas, rangoli and the jharokha windows of Jaipur's old city.",campaign,all,
+product_1,"Roshni Kundan Jhumkas: gold-plated brass jhumkas with kundan-style stones and freshwater pearl drops. ₹2,450.",product,all,
+product_2,"Diya Meenakari Studs: lightweight studs with hand-painted red and green meenakari. ₹1,200.",product,all,
+product_3,"Rangoli Maang Tikka: gold-plated brass maang tikka with pink glass beads. ₹1,850.",product,all,
+product_4,"Jharokha Layered Necklace: two-layer gold-plated brass necklace with jharokha-shaped pendants. ₹3,900.",product,all,
+product_5,"Chandni Silver Bangles (set of 2): 925 sterling silver bangles with hand-engraved motifs. ₹4,800.",product,all,
+product_6,"Tara Choker Set: kundan-style choker with matching earrings. ₹6,500.",product,all,
+price_range,"Prices in The Roshni Edit range from ₹1,200 to ₹6,500.",product,all,
+shipping,"Free shipping across India on orders above ₹1,999. Orders are dispatched within 3 working days.",policy,consumer,
+packaging,"Every order arrives in a reusable cotton pouch inside a gift box, ready for Diwali gifting.",policy,consumer,
+care,"Care tips: keep pieces away from water and perfume, wipe them with a soft dry cloth and store them in their pouch.",policy,consumer,
+offer,"Waitlist members get early access to The Roshni Edit from {{launch_date}} until {{public_launch_date}}, before it opens to everyone, plus 10% off with a code we email to them on launch day.",offer,consumer,Tokens are filled from SETTINGS by each lane.
+offer_terms,"The waitlist code works once per customer, on Roshni Edit pieces, during early access only.",offer,consumer,
+code_secrecy,"Never print the discount code itself in public content or before launch. Say ""10% off for waitlist members"" instead. Only the launch-day email to waitlist members reveals it.",rules,rule,Keeps the code exclusive to the waitlist.
+offer_code,ROSHNI10,offer,none,Template placeholder {{offer_code}}. Only Lane 5 launch emails use it; Lane 1 flags it if AI output contains it.
+offer_percent,10,offer,none,Template placeholder {{offer_percent}}.
+waitlist_cta,Join the waitlist (link in bio) to get early access and 10% off.,offer,consumer,
+audience,"Women aged 22 to 40 in Indian metros and tier-2 cities who shop on Instagram, love handmade festive jewellery, and buy for their own Diwali outfits or as gifts for sisters, mothers and friends.",audience,rule,Who we write for. Not a fact to state publicly.
+audience_needs,"They want festive pieces that look rich but feel light and are not mass-produced, and they like to plan Diwali shopping early.",audience,rule,
+campaign_goal,"Grow the waitlist before launch, then turn waitlist members into first orders during early access.",campaign,rule,
+writing_dos,"Write in Indian English. Talk to the reader as 'you'. Use short sentences. Mention the handmade process and the artisans. Light Hindi words such as shubh, roshni and ghar are welcome. Use at most 3 emojis per caption.",rules,rule,
+writing_donts,"Never claim real gold, solid gold, hallmarking, certification, waterproof or tarnish-proof finishes, lifetime guarantees, stock numbers, best-seller status, awards or celebrity use. Never promise delivery dates. Never mention any discount other than the 10% waitlist offer.",rules,rule,
+hashtags,Always use #KayaJewels and #RoshniEdit. Good extra tags: #HandmadeJewellery #DiwaliJewellery #JaipurJewellery #KundanJewellery #DiwaliGifting #FestiveLook #SupportHandmade #MadeInIndia,rules,rule,
+seo_keywords,handmade jhumkas for diwali; diwali jewellery online india; handmade kundan earrings; diwali gifting jewellery,seo,none,Lane 1 picks the blog target keyword from this list (semicolon-separated).
+forbidden_phrases,real gold; solid gold; pure gold; 22k; 24k; hallmark; certified; guarantee; waterproof; tarnish-proof; tarnish free; lifetime; celebrity; award; bestseller; best-seller; best seller; cheapest; lowest price; buy 1 get 1; buy one get one; limited stock; only a few left,rules,none,Machine list (semicolon-separated). Quality checks flag any of these in AI output.
+b2b_stockist_offer,Boutique stockists buy at 35% off MRP with a minimum order of 20 pieces. Stock ships within 7 working days of order confirmation. A printed lookbook and a counter display card come with the first order.,b2b,b2b,Lane 6 only.
+b2b_collab_offer,"Micro-influencer collaboration: we gift one Roshni Edit piece of the creator's choice (up to ₹3,000), and the creator gets a personal code that gives followers 10% off and earns the creator 10% commission on sales. We ask for 1 reel and 2 stories. There is no paid fee.",b2b,b2b,Lane 6 only.
+b2b_contact,"Stockist and collaboration chats are handled personally by our founder, Kavya Mehra.",b2b,b2b,Lane 6 only.
+campaign_name,Diwali 2026 · The Roshni Edit launch,campaign,none,Internal name used in reports and prompts.
