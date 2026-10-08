@@ -2,7 +2,7 @@
 
 A free, self-hosted **n8n** demo by **Marion Enroute**: a complete marketing and outreach campaign for a fictional client, **Kaya Jewels** (handmade jewellery on Instagram, India), launching its Diwali collection **The Roshni Edit** (waitlist gets early access + 10% off).
 
-One n8n canvas, 8 independent lanes, one Google Sheet as the database: **[`lanes/marion-marketing-engine.json`](lanes/marion-marketing-engine.json)** (import this one file).
+One n8n canvas, 8 independent lanes, one Google Sheet as the database: **[`lanes/marion-marketing-engine.json`](lanes/marion-marketing-engine.json)** (import this one file; [screenshot](docs/canvas.png)).
 
 | Lane | What it does | Trigger |
 |---|---|---|

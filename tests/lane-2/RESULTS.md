@@ -24,6 +24,9 @@ node tests/common/import-test.mjs lanes/lane-2-publisher.json lanes/lane-3-lead-
 
 ## Results (checks passed / total)
 
+_Re-run in session 5 on the merged files (2026-10-09), n8n 1.123.84, both engines._
+
+
 | Scenario | `vm` engine | `legacy` engine |
 |---|---|---|
 | Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once | 11/11 | 11/11 |
@@ -35,12 +38,13 @@ node tests/common/import-test.mjs lanes/lane-2-publisher.json lanes/lane-3-lead-
 | A very long caption stays under the Telegram limit | 3/3 | 3/3 |
 | Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published | 17/17 | 17/17 |
 | A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed | 6/6 | 6/6 |
+| Cross-lane guard: a lead Lane 4 is about to email (nurture step due within a minute) is left to Lane 4 and gets the newsletter later | 3/3 | 3/3 |
 | Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked | 8/8 | 8/8 |
 | Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates | 9/9 | 9/9 |
 | Two runs back to back: no double post, no double email | 3/3 | 3/3 |
 | Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything | 7/7 | 7/7 |
 | SETTINGS missing a key: clear error, nothing written | 3/3 | 3/3 |
-| **Total** | **107/107** | **107/107** |
+| **Total** | **110/110** | **110/110** |
 
 | Other test | Result |
 |---|---|

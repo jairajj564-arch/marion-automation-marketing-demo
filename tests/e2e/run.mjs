@@ -198,7 +198,7 @@ try {
     T.check(world.rows('CONTENT').filter((r) => r.batch_id === approved[0].batch_id && !approvedIds.has(r.content_id)).every((r) => r.status === 'pending_approval'), 'rows nobody approved stay pending_approval (never published)');
   });
 
-  await T.scenario('6 · Lane 4 nurtured Riya: welcome within the first minute, then the next steps on the demo clock, never twice', async () => {
+  await T.scenario('6 · Lane 4 nurtured Riya: the welcome first (after the sample-data backlog, 3 per minute), then the next steps on the demo clock, never twice', async () => {
     const nurture = world.events('email_sent').filter((e) => e.lane === '4' && world.row('LEADS', e.entity_id)?.email === you).map((e) => JSON.parse(e.meta_json).step);
     T.check(nurture[0] === 1 && new Set(nurture).size === nurture.length && nurture.length >= 3, `nurture steps sent to Riya: ${nurture.join(', ')}`);
     const first = world.emailsTo(you)[0];

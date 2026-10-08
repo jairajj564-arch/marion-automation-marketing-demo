@@ -145,7 +145,7 @@ The whole demo is **one file**: `lanes/marion-marketing-engine.json`. It contain
    [IO.File]::WriteAllText("$PWD\my-marketing-engine.json", $t)
    ```
 4. In n8n: **Overview → Create Workflow**, then the **⋯** menu (top right) → **Import from File…** → choose `my-marketing-engine.json`.
-5. You see one big canvas: a grey overview note at the top, then 8 coloured bands, `Lane 1 · Content engine` at the top to `Lane 8 · Report` at the bottom. **Save** (Ctrl+S). Saving is when n8n links the credentials by name.
+5. You see one big canvas (it should look like [`docs/canvas.png`](docs/canvas.png)): a light overview note at the top, then 8 coloured bands, `Lane 1 · Content engine` at the top to `Lane 8 · Report` at the bottom. **Save** (Ctrl+S). Saving is when n8n links the credentials by name.
 6. Spot-check the links: double-click `Lane 1 · Read SETTINGS` → the credential field says `Kaya Demo · Google Sheets`. Double-click `Lane 4 · Send nurture email` → `Kaya Demo · Gmail Sender`. Close.
 
 > The individual lane files (`lanes/lane-1-…json` … `lane-8-…json`) are the same lanes one by one, handy if you ever want to import a single lane. You don't need them for the demo.

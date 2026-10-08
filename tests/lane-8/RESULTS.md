@@ -1,6 +1,6 @@
 # Lane 8 · Report: test results
 
-Run on 2026-10-08 with **n8n 1.123.84** (`n8n start`, `GENERIC_TIMEZONE=Asia/Kolkata`), once with the default expression engine (`vm`) and once with `N8N_EXPRESSION_ENGINE=legacy`.
+Run on 2026-10-09 with **n8n 1.123.84** (`n8n start`, `GENERIC_TIMEZONE=Asia/Kolkata`), once with the default expression engine (`vm`) and once with `N8N_EXPRESSION_ENGINE=legacy`.
 
 How it was run: the committed lane file is copied, and only in the copy the trigger becomes a Webhook, the Google Sheets / Gmail / Telegram nodes become HTTP nodes talking to a local mock (`tests/lib/mock.mjs`: an in-memory sheet that keeps the real "only the columns you send are written" behaviour, a Gmail that hands out thread ids, a Telegram, and Gemini/Groq endpoints), so every Code, IF, Loop and Wait node of the lane runs unchanged inside the real n8n server. Time is moved forward by shifting every stored timestamp back (`mock.shiftTime`). Re-run with `tests/run-all.sh`.
 

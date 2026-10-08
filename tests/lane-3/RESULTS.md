@@ -21,6 +21,9 @@ node tests/lane-3/run.mjs legacy
 
 ## Results (checks passed / total)
 
+_Re-run in session 5 on the merged files (2026-10-09), n8n 1.123.84, both engines._
+
+
 | Scenario | `vm` engine | `legacy` engine |
 |---|---|---|
 | Done-when 1: kayademo.customers+test1@gmail.com creates one new row | 13/13 | 13/13 |

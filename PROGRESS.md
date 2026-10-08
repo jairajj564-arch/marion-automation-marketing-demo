@@ -87,7 +87,22 @@ Kept unless noted. "Kept" means it does not conflict with SPEC or another lane.
 
 See the table in the PR / `tests/README.md` for how to re-run. Results files: `tests/lane-N/RESULTS.md`, `tests/e2e/RESULTS.md`, `tests/IMPORT-CHECK.md`.
 
-RESULTS_TABLE_PLACEHOLDER
+| Suite | `vm` (default) | `legacy` |
+|---|---|---|
+| Lane 2 · Publisher (`tests/lane-2`) | 110/110 | 110/110 |
+| Lane 2 · live Schedule Trigger (real cron) | 4/4 | – |
+| Lane 3 · Lead engine | 65/65 | 65/65 |
+| Lane 4 · Sequence sender | 112/112 | 112/112 |
+| Lane 5 · Launch engine | 96/96 | 96/96 |
+| Lane 6 · Outreach | 158/158 (20 scenarios) | 158/158 |
+| Lane 7 · Inbox | 159/159 (20 scenarios) | 159/159 |
+| Lane 8 · Report | 105/105 | 105/105 |
+| **End-to-end storyline on the canvas** (`tests/e2e`) | **60/60** (12 scenarios) | **60/60** |
+| Import: CLI, canvas + 8 lane files | 9/9 files, 83/83 canvas credential references linked, round trip identical | |
+| Import: editor *Import from File* + Save | 256 nodes, 83/83 linked | |
+| `tools/validate-workflow.mjs` | canvas + 8 lane files: valid, 0 warnings | |
+
+Lane 1 has no automated suite of its own (session 1 tested it by hand); it runs inside the end-to-end storyline (13 rows, 5 AI calls, approval message, events). The storyline run against the **pre-fix** lanes failed the cross-lane gap check and the reply-addressing check (details in `tests/e2e/RESULTS.md`), so the storyline really catches the bugs fixed here.
 
 ---
 

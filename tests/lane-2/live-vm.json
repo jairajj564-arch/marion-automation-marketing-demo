@@ -2,7 +2,7 @@
   {
     "scenario": "Real cron trigger every minute",
     "ok": true,
-    "message": "the row appeared in the channel 45 s after the server started (within the first minute)"
+    "message": "the row appeared in the channel 6 s after the server started (within the first minute)"
   },
   {
     "scenario": "Real cron trigger every minute",

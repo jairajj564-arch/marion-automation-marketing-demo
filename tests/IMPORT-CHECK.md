@@ -20,3 +20,11 @@ Every file was then imported with `n8n import:workflow` and exported again with 
 | ✔ | `lanes/lane-8-report.json` | 26 | 10 | 10 | yes |
 
 The import does not depend on the expression engine; both engines were exercised by running the canvas test copy end to end (`tests/e2e/RESULTS.md`).
+
+## The owner's path: editor "Import from File" + Save
+
+Run by `tests/e2e/ui-import-check.mjs` in a real browser (Chromium via Playwright) against n8n with the same six dummy credentials:
+
+✔ editor **Import from File** + Save: 256 nodes, 83 credential references, 83 linked by name
+
+Why this needs `"id": null`: on Import from File the editor (useCanvasOperations `removeUnknownCredentials`) deletes every credential reference whose id is not a known credential and spares only `id: null`; then `matchCredentials` links the rest by name. With `"id": ""` (the old SPEC rule) this check found 0 of 83 references linked.
