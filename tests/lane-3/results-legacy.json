@@ -1,0 +1,327 @@
+[
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "the form accepts the submission (HTTP 200)"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "form page shows the title, the description and the friendly completion message"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "no \"automated with n8n\" attribution on the form"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "exactly one LEADS row (found 1)"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "status new, email_allowed TRUE (new/TRUE)"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "lead_id format LD-yyyyMMdd-XXXX (LD-20261008-LXHV)"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "source, sequence_id, seq_step 0, launch_step 0"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "timestamps in IST format, next_action_at = now (2026-10-08T19:50:01+05:30)"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "other tracking columns blank"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "row has every LEADS column of SPEC 2.4"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "no email sent by Lane 3"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "one lead_captured event and nothing else (lead_captured)"
+  },
+  {
+    "scenario": "Done-when 1: kayademo.customers+test1@gmail.com creates one new row",
+    "ok": true,
+    "message": "Sheets rules respected (no unknown columns written): none"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "three rows (3)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "hot: score 100, reason string (100 hot | budget above_5000 +30; occasion diwali_outfit +25; interest full_set +15; instagram +10; phone +10; consent +10)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "warm: score 65 (65 warm | budget 3000_5000 +25; occasion gifting +20; interest earrings +10; consent +10)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "cold: score 13 (13 cold | budget under_1500 +5; occasion just_browsing +0; interest maang_tikka +8)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "text fields stored as typed (special characters kept as text)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "exactly one Telegram message, to the owner chat (1)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "alert text HTML-escaped: 🔥 New hot lead: Hina &lt;b&gt;&amp; (Mumbai &amp; Pune), score 100"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "one hot_alert_sent event for the hot lead"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "three lead_captured events with score + segment in meta_json"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "consent \"No thanks\": saved, consent FALSE, next_action_at blank, status new (FALSE//new)"
+  },
+  {
+    "scenario": "Hot, warm and cold leads (scores and segments)",
+    "ok": true,
+    "message": "Sheets rules respected (no unknown columns written): none"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "six rows (6)"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "Earrings / Under ₹1,500 / My Diwali outfit → earrings under_1500 diwali_outfit, score 50"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "Necklaces / ₹1,500–₹3,000 / Gifting → necklaces 1500_3000 gifting, score 77"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "Maang tikka / ₹3,000–₹5,000 / Wedding season → maang_tikka 3000_5000 wedding_season, score 73"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "Bangles / Above ₹5,000 / Treating myself → bangles above_5000 self_treat, score 75"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "Gifting / Under ₹1,500 / Just browsing → gifting under_1500 just_browsing, score 35"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "A full festive set / ₹1,500–₹3,000 / My Diwali outfit → full_set 1500_3000 diwali_outfit, score 75"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "all 6 interests, 4 budgets and 5 occasions were exercised"
+  },
+  {
+    "scenario": "Every dropdown option maps to its stored value; scores match the SPEC table",
+    "ok": true,
+    "message": "Sheets rules respected (no unknown columns written): none"
+  },
+  {
+    "scenario": "Done-when 3: same email twice (different letter case) creates one row",
+    "ok": true,
+    "message": "still one row, the original (1 row, name Meera)"
+  },
+  {
+    "scenario": "Done-when 3: same email twice (different letter case) creates one row",
+    "ok": true,
+    "message": "two lead_duplicate events pointing at the original lead, lower-cased email in meta"
+  },
+  {
+    "scenario": "Done-when 3: same email twice (different letter case) creates one row",
+    "ok": true,
+    "message": "only one lead_captured"
+  },
+  {
+    "scenario": "Done-when 3: same email twice (different letter case) creates one row",
+    "ok": true,
+    "message": "LEADS written exactly once"
+  },
+  {
+    "scenario": "Done-when 2: someone@example.com is saved as blocked",
+    "ok": true,
+    "message": "one row, blocked, email_allowed FALSE (blocked/FALSE)"
+  },
+  {
+    "scenario": "Done-when 2: someone@example.com is saved as blocked",
+    "ok": true,
+    "message": "next_action_at blank (never emailed)"
+  },
+  {
+    "scenario": "Done-when 2: someone@example.com is saved as blocked",
+    "ok": true,
+    "message": "lead_captured + email_blocked (with reason) logged"
+  },
+  {
+    "scenario": "Done-when 2: someone@example.com is saved as blocked",
+    "ok": true,
+    "message": "email_blocked points at the new lead"
+  },
+  {
+    "scenario": "Done-when 2: someone@example.com is saved as blocked",
+    "ok": true,
+    "message": "a hot lead still pings the owner on Telegram (blocked only affects email)"
+  },
+  {
+    "scenario": "Done-when 2: someone@example.com is saved as blocked",
+    "ok": true,
+    "message": "nothing emailed"
+  },
+  {
+    "scenario": "Plus-address of the demo inbox is allowed; other addresses are blocked",
+    "ok": true,
+    "message": "email_allowed per address: hing.123@gmail.com=TRUE, ustomers@gmail.com=TRUE, m.person@gmail.com=FALSE, tomers+x@yahoo.com=FALSE"
+  },
+  {
+    "scenario": "Plus-address of the demo inbox is allowed; other addresses are blocked",
+    "ok": true,
+    "message": "statuses new/new/blocked/blocked"
+  },
+  {
+    "scenario": "Instagram handle gets an @",
+    "ok": true,
+    "message": "\"meera.jewels\" → @meera.jewels"
+  },
+  {
+    "scenario": "Instagram handle gets an @",
+    "ok": true,
+    "message": "\"@@  meera .jewels \" → @meera.jewels"
+  },
+  {
+    "scenario": "Instagram handle gets an @",
+    "ok": true,
+    "message": "blank handle stays blank and earns no points"
+  },
+  {
+    "scenario": "Invalid or missing values are rejected and logged (no row)",
+    "ok": true,
+    "message": "no LEADS row (0)"
+  },
+  {
+    "scenario": "Invalid or missing values are rejected and logged (no row)",
+    "ok": true,
+    "message": "five error events (5)"
+  },
+  {
+    "scenario": "Invalid or missing values are rejected and logged (no row)",
+    "ok": true,
+    "message": "error events name the node"
+  },
+  {
+    "scenario": "Invalid or missing values are rejected and logged (no row)",
+    "ok": true,
+    "message": "details name the field: Waitlist form rejected: Email \"not-an-email\" is not a valid address || Waitlist form rejected: Email is missing || Waitlist form rejected: City is missing || Waitlist form rejected: First name is missing"
+  },
+  {
+    "scenario": "Invalid or missing values are rejected and logged (no row)",
+    "ok": true,
+    "message": "nothing else logged, no Telegram"
+  },
+  {
+    "scenario": "Empty LEADS tab (the Sheets read returns nothing)",
+    "ok": true,
+    "message": "first-ever lead is saved"
+  },
+  {
+    "scenario": "Empty LEADS tab (the Sheets read returns nothing)",
+    "ok": true,
+    "message": "LEADS read once"
+  },
+  {
+    "scenario": "Telegram failing: the lead is still saved and logged",
+    "ok": true,
+    "message": "hot lead saved"
+  },
+  {
+    "scenario": "Telegram failing: the lead is still saved and logged",
+    "ok": true,
+    "message": "lead_captured logged"
+  },
+  {
+    "scenario": "Telegram failing: the lead is still saved and logged",
+    "ok": true,
+    "message": "no hot_alert_sent; one error event naming the Telegram node (Hot-lead alert not sent: 403 - \"{\\\"ok\\\":false,\\\"error_code\\\":403,\\\"description\\\":\\\"Forbidden: bot is not a member of the channel chat (mock)\\\"}\")"
+  },
+  {
+    "scenario": "Node failing mid-run: LEADS append fails twice, the node retries and succeeds (no double row)",
+    "ok": true,
+    "message": "one row, one lead_captured after 3 failed attempts"
+  },
+  {
+    "scenario": "Node failing mid-run: LEADS read is down for good (nothing half-written)",
+    "ok": true,
+    "message": "the execution is marked as failed in n8n (error)"
+  },
+  {
+    "scenario": "Node failing mid-run: LEADS read is down for good (nothing half-written)",
+    "ok": true,
+    "message": "no row, no event, no Telegram (the run stopped with an error in n8n Executions)"
+  },
+  {
+    "scenario": "SETTINGS missing a key: clear error, nothing written",
+    "ok": true,
+    "message": "nothing written when HOT_LEAD_SCORE is missing"
+  },
+  {
+    "scenario": "SETTINGS missing a key: clear error, nothing written",
+    "ok": true,
+    "message": "the execution fails with a message naming the missing key (error)"
+  },
+  {
+    "scenario": "SETTINGS missing a key: clear error, nothing written",
+    "ok": true,
+    "message": "Sheets rules respected (no unknown columns written): none"
+  },
+  {
+    "scenario": "Custom thresholds come from SETTINGS",
+    "ok": true,
+    "message": "score 25 with HOT_LEAD_SCORE 20 → hot"
+  }
+]

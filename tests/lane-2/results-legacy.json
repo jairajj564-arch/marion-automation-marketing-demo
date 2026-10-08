@@ -1,0 +1,537 @@
+[
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "one message, to the channel (1)"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "text = escaped body + blank line + hashtags + blank line + waitlist link"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "sent with parse_mode HTML"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "row published: published tg:101 2026-10-08T19:46:51+05:30"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "exactly one event: content_published (content_published)"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "event fields: entity, channel telegram_channel, approved → published, lane 2"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "meta_json.publish_ref, demo_mode TRUE, event id format"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "LEADS not even read when no newsletter is due"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "two more runs: still ONE message and ONE event (1/1)"
+  },
+  {
+    "scenario": "Done-when: an approved row whose scheduled_for has passed appears in the channel within a minute, exactly once",
+    "ok": true,
+    "message": "run status success"
+  },
+  {
+    "scenario": "Rows that must be left alone: not yet due, pending_approval, needs_changes, rejected, published, failed",
+    "ok": true,
+    "message": "nothing sent"
+  },
+  {
+    "scenario": "Rows that must be left alone: not yet due, pending_approval, needs_changes, rejected, published, failed",
+    "ok": true,
+    "message": "CONTENT untouched, no write at all"
+  },
+  {
+    "scenario": "Rows that must be left alone: not yet due, pending_approval, needs_changes, rejected, published, failed",
+    "ok": true,
+    "message": "no log row (a run that finds nothing ends quietly)"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "four messages (4)"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "blog teaser to the channel: \"📝 <b>New on the Kaya Jewels blog</b>\\n\\n<b>Handmade &amp; Heritage</b>\\n\\nHow we make jewellery &lt;by hand&gt; in Jaipur.\\n\\nRead: /blog/handmade-jewellery-jaipur (demo)\\n\\n👉 Join the waitlist: http://localhost:5678/form/kaya-waitlist\""
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "blog teaser does not contain the article body"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "reel brief to the OWNER chat: \"🎬 <b>Reel brief</b>: Diya to jhumka\\n\\nHook: a lit diya\\nShots:\\n1. Hands\\n2. Stones\\nAudio: soft flute\\nLength: 25 seconds\\n\\n<b>Caption</b>\\nWatch a jhumka come alive\\n\\n#KayaJewels #Reels\""
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "short post to the channel"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "caption to the channel"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "all four rows published with tg:<id>"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "four content_published events; the reel one says telegram_owner"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "posted oldest scheduled_for first"
+  },
+  {
+    "scenario": "Each asset type: ig_caption, short_post, blog_article, reel_idea",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "the good row was still published"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "good row published"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "ig_caption row skipped, status unchanged, last_error: \"Lane 2 skipped: body is empty\""
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "ig_caption row skipped, status unchanged, last_error: \"Lane 2 skipped: scheduled_for is missing\""
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "ig_caption row skipped, status unchanged, last_error: \"Lane 2 skipped: scheduled_for \"next tuesday-ish\" is not a valid timestamp\""
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "blog_article row skipped, status unchanged, last_error: \"Lane 2 skipped: slug is empty\""
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "story row skipped, status unchanged, last_error: \"Lane 2 skipped: asset_type \"story\" is not supported\""
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "newsletter row skipped, status unchanged, last_error: \"Lane 2 skipped: unknown placeholder {{brand_name}} in title/body\""
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "a future row with an empty body is not touched yet"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "six error events with node + message in meta_json (6)"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "each detail names the field"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "the invalid newsletter sent nothing and LEADS was not read"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "two more runs: no repeat posts, no repeat error rows, no new writes (errors 6)"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "after a human fixes the row it publishes and last_error is cleared"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "Rows with missing or invalid fields are skipped and logged (once), other rows still go out",
+    "ok": true,
+    "message": "runs finished successfully (a bad row never crashes the run)"
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "row failed with last_error: Telegram: 403 - \"{\\\"ok\\\":false,\\\"error_code\\\":403,\\\"description\\\":\\\"Forbidden: bot is not a member of the channel chat (mock)\\\"}\""
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "the other row was published"
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "one message delivered"
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "one publish_failed event with the error in meta_json"
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "a failed row is not retried by itself (human sets it back to approved)"
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "after a human sets it back to approved it publishes and last_error is cleared"
+  },
+  {
+    "scenario": "Telegram failing: that row is failed with last_error, other rows still processed",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "More due rows than MAX_POSTS_PER_RUN (2)",
+    "ok": true,
+    "message": "run 1 posts the two oldest: Post 1,Post 2"
+  },
+  {
+    "scenario": "More due rows than MAX_POSTS_PER_RUN (2)",
+    "ok": true,
+    "message": "run 2 posts the next two"
+  },
+  {
+    "scenario": "More due rows than MAX_POSTS_PER_RUN (2)",
+    "ok": true,
+    "message": "run 3 posts the last one; run 4 does nothing"
+  },
+  {
+    "scenario": "More due rows than MAX_POSTS_PER_RUN (2)",
+    "ok": true,
+    "message": "no post twice"
+  },
+  {
+    "scenario": "A very long caption stays under the Telegram limit",
+    "ok": true,
+    "message": "message is 4000 characters, body cut with …, hashtags and link kept"
+  },
+  {
+    "scenario": "A very long caption stays under the Telegram limit",
+    "ok": true,
+    "message": "no HTML entity cut in half"
+  },
+  {
+    "scenario": "A very long caption stays under the Telegram limit",
+    "ok": true,
+    "message": "long caption published"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "run 1: 3 emails sent, newsletter now publishing (3 / publishing)"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "SEND_DELAY_SECONDS respected between emails (0,1057,1051 ms)"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "run took 3 s (budget 45 s)"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "run 2: 3 more"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "run 3: the last one, newsletter published (published)"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "publish_ref newsletter:7 sent"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "run 4: nothing more"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "each active lead got it exactly once; consent FALSE / unsubscribed / email_allowed FALSE / blocked / customer got nothing"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "subject plain, body HTML-escaped, placeholders filled, sender name (A first look, Zoë <b>)"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "every lead row: last_newsletter_id, last_contacted_at, updated_at"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "thread id appended (old1,old2,thr101)"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "only the last 10 thread ids are kept"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "skipped leads untouched"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "seven email_sent events with content_id + thread_id"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "one content_published event (channel email) when finished"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "lead status / consent / email_allowed unchanged"
+  },
+  {
+    "scenario": "Newsletter over several runs (7 leads, 3 per run) resumes through last_newsletter_id and finishes as published",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed",
+    "ok": true,
+    "message": "only the lead outside the gap got it"
+  },
+  {
+    "scenario": "A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed",
+    "ok": true,
+    "message": "newsletter keeps publishing; the gapped lead is untouched"
+  },
+  {
+    "scenario": "A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed",
+    "ok": true,
+    "message": "next run (still inside the gap): nothing sent, nothing logged"
+  },
+  {
+    "scenario": "A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed",
+    "ok": true,
+    "message": "after the gap: sent and published (newsletter:2 sent)"
+  },
+  {
+    "scenario": "A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed",
+    "ok": true,
+    "message": "MIN_EMAIL_GAP_DAYS = 0 (SETTINGS) switches the gap rule off"
+  },
+  {
+    "scenario": "A lead behind the gap rule (MIN_EMAIL_GAP_DAYS) waits; the newsletter stays publishing until they are mailed",
+    "ok": true,
+    "message": "DEMO_MODE FALSE: a real half day (12 h) applies — 11 h ago waits, 13 h ago is mailed"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "only demo-inbox plus-addresses were emailed (kayademo.customers+upper@gmail.com,kayademo.customers+l6@gmail.com)"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "the four refused leads are now status blocked, email_allowed FALSE"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "a blocked lead is not marked as having received the newsletter"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "four email_blocked events with a reason (not in ALLOWED_DEMO_INBOXES or ALLOWED_EMAIL_DOMAINS | not in ALLOWED_DEMO_INBOXES or ALLOWED_EMAIL_DOMAINS | not a single valid email address | not a single valid email address)"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "blocked leads are no longer waiting: newsletter published after the 2 real sends (newsletter:2 sent)"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "a blocked lead update writes only lead_id, status, email_allowed, updated_at"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "blocked addresses are not tried again"
+  },
+  {
+    "scenario": "Safety gate: blocked and invalid addresses never get mail, the lead is marked blocked",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "the other two leads were emailed"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "the failed lead row is unchanged (not advanced)"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "one email_failed event (Newsletter CNT-20261008-143205-33 not sent: 500 - \"{\\\"message\\\":\\\"gmail send failed (mock)\\\"}\")"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "newsletter is NOT published while a lead is still waiting"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "run 2 tries the failing lead again (still failing), nobody gets a duplicate"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "once Gmail works the lead gets it and the newsletter is published (newsletter:3 sent)"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "every lead got it exactly once"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "Gmail node is never retried inside a run (5 calls = 3 sent + 2 failed)"
+  },
+  {
+    "scenario": "Gmail failing: email_failed logged, lead not advanced, retried on a later run, no duplicates",
+    "ok": true,
+    "message": "Sheets rules: only owned columns are written, no new columns, CONTENT/LEADS only updated"
+  },
+  {
+    "scenario": "Two runs back to back: no double post, no double email",
+    "ok": true,
+    "message": "1 post, 2 emails after two runs (1/2)"
+  },
+  {
+    "scenario": "Two runs back to back: no double post, no double email",
+    "ok": true,
+    "message": "each logged once"
+  },
+  {
+    "scenario": "Two runs back to back: no double post, no double email",
+    "ok": true,
+    "message": "a third run changes nothing"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "CONTENT update failed 2× then succeeded on retry: published, ONE message (published)"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "logged once"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "the run is marked failed in n8n (error)"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "the post (processed before the newsletter) was published once"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "no email sent; newsletter is publishing and will continue"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "next run: no second post, the newsletter completes"
+  },
+  {
+    "scenario": "Node failing mid-run: Sheets hiccups are retried; a dead LEADS read does not lose or duplicate anything",
+    "ok": true,
+    "message": "no sheet rule violations"
+  },
+  {
+    "scenario": "SETTINGS missing a key: clear error, nothing written",
+    "ok": true,
+    "message": "execution fails naming MAX_POSTS_PER_RUN"
+  },
+  {
+    "scenario": "SETTINGS missing a key: clear error, nothing written",
+    "ok": true,
+    "message": "nothing posted or written"
+  },
+  {
+    "scenario": "SETTINGS missing a key: clear error, nothing written",
+    "ok": true,
+    "message": "a non-numeric setting stops the run with a clear message"
+  }
+]
