@@ -1,0 +1,1712 @@
+{
+  "name": "Kaya Jewels demo · Lane 3 · Lead engine",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🪔 Lane 3 · Lead engine  ·  trigger: the waitlist form (URL `<n8n>/form/kaya-waitlist`, works while the workflow is active)\n**What it does:** a visitor fills in the form → the answers are cleaned and checked → a duplicate email is ignored → the lead is scored (rules in docs/lane-3.md) → the email goes through the demo safety gate → one row is added to **LEADS** → events are logged → hot leads (score ≥ HOT_LEAD_SCORE) ping you on Telegram.\n**Sends no email:** Lane 4 sends the welcome email within a minute.\n**Reads:** SETTINGS, LEADS. **Writes:** LEADS (a full new row), EVENTS_LOG.  **Credentials:** Kaya Demo · Google Sheets / Telegram Bot.  **Docs:** SPEC.md §7.3 · docs/lane-3.md.",
+        "height": 1000,
+        "width": 5600,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        2400
+      ],
+      "id": "4c2c8f43-7871-5891-8ff1-d080313626bc",
+      "name": "Lane 3 · Lead engine"
+    },
+    {
+      "parameters": {
+        "content": "### How a lead is scored (max 100)\n**Budget:** above_5000 +30 · 3000_5000 +25 · 1500_3000 +15 · under_1500 +5\n**Occasion:** diwali_outfit +25 · gifting +20 · wedding_season +20 · self_treat +15 · just_browsing +0\n**Interest:** full_set +15 · necklaces +12 · earrings +10 · bangles +10 · gifting +10 · maang_tikka +8\n**Extras:** Instagram handle +10 · WhatsApp number +10 · email consent +10\n**Segment:** score ≥ HOT_LEAD_SCORE → hot · ≥ WARM_LEAD_SCORE → warm · else cold.",
+        "height": 400,
+        "width": 1500,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        2960
+      ],
+      "id": "346504cd-c269-5e6b-878d-6555e03b9345",
+      "name": "Lane 3 · How scoring works"
+    },
+    {
+      "parameters": {
+        "formTitle": "Join the Roshni Edit waitlist",
+        "formDescription": "Early access + 10% off for waitlist members. Handmade in Jaipur by Kaya Jewels.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "First name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "City",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Instagram handle",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "WhatsApp number",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "I'm shopping for",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Earrings"
+                  },
+                  {
+                    "option": "Necklaces"
+                  },
+                  {
+                    "option": "Maang tikka"
+                  },
+                  {
+                    "option": "Bangles"
+                  },
+                  {
+                    "option": "Gifting"
+                  },
+                  {
+                    "option": "A full festive set"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "My budget",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Under ₹1,500"
+                  },
+                  {
+                    "option": "₹1,500–₹3,000"
+                  },
+                  {
+                    "option": "₹3,000–₹5,000"
+                  },
+                  {
+                    "option": "Above ₹5,000"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Occasion",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "My Diwali outfit"
+                  },
+                  {
+                    "option": "Gifting"
+                  },
+                  {
+                    "option": "Wedding season"
+                  },
+                  {
+                    "option": "Treating myself"
+                  },
+                  {
+                    "option": "Just browsing"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email consent",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Yes, email me about early access and offers"
+                  },
+                  {
+                    "option": "No thanks"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "onReceived",
+        "options": {
+          "path": "kaya-waitlist",
+          "appendAttribution": false,
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "You're on the list! Check your inbox soon for early-access details."
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        2700
+      ],
+      "id": "b4b6b128-614c-5cea-8a90-bd4654c4a4a9",
+      "name": "Lane 3 · Waitlist form",
+      "webhookId": "6321921d-a087-592a-8793-685415b217e7",
+      "notes": "Public waitlist form",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SETTINGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        2700
+      ],
+      "id": "4be43695-cb68-57db-8133-710faa352a25",
+      "name": "Lane 3 · Read SETTINGS",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Reads every setting",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// SETTINGS arrives as one item per row (key | value | type | description).\n// Turn it into ONE item, e.g. { HOT_LEAD_SCORE: '70', ... }.\nconst settings = {};\nfor (const item of $input.all()) {\n  const key = String(item.json.key ?? '').trim();\n  if (!key) continue;\n  const value = item.json.value;\n  settings[key] = typeof value === 'string' ? value.trim() : (value ?? '');\n}\n\n// Stop early with a clear message if the sheet is missing something Lane 3 needs.\nconst required = [\n  'DEMO_MODE', 'DEMO_MINUTES_PER_DAY', 'SENDER_EMAIL', 'ALLOWED_DEMO_INBOXES',\n  'TELEGRAM_OWNER_CHAT_ID', 'HOT_LEAD_SCORE', 'WARM_LEAD_SCORE',\n];\nconst missing = required.filter((key) => settings[key] === undefined || String(settings[key]).trim() === '');\nif (missing.length) {\n  throw new Error(`The SETTINGS tab is missing a value for: ${missing.join(', ')}`);\n}\nif (settings.ALLOWED_EMAIL_DOMAINS === undefined) settings.ALLOWED_EMAIL_DOMAINS = '';   // optional, may be blank\nif (!Number.isFinite(Number(settings.HOT_LEAD_SCORE)) || !Number.isFinite(Number(settings.WARM_LEAD_SCORE))) {\n  throw new Error('SETTINGS HOT_LEAD_SCORE and WARM_LEAD_SCORE must be numbers');\n}\n\n// Derived values (SPEC section 5.3). Sheet booleans may come back as true or \"TRUE\".\nsettings.IS_DEMO = String(settings.DEMO_MODE).trim().toUpperCase() === 'TRUE';\nconst demoMinutes = Number(settings.DEMO_MINUTES_PER_DAY);\nif (settings.IS_DEMO && !(demoMinutes > 0)) {\n  throw new Error('DEMO_MINUTES_PER_DAY must be a number above 0 when DEMO_MODE is TRUE');\n}\nsettings.DAY_MS = settings.IS_DEMO ? demoMinutes * 60 * 1000 : 24 * 60 * 60 * 1000;\n\nreturn [{ json: settings }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        2700
+      ],
+      "id": "7a13c633-4c19-5f2b-872b-19f5e4ad4662",
+      "name": "Lane 3 · Settings to object",
+      "notes": "Rows → one settings item",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Validate and normalise\n// Turns the raw form answers (keys = the field labels) into clean, stored values (SPEC 7.3).\n// A bad submission is not thrown away silently: ok=false carries the reasons so they can be logged.\nconst form = $('Lane 3 · Waitlist form').first().json;\n\n// Tolerate a curly apostrophe in the label, and stray spaces.\nconst answers = {};\nfor (const [label, value] of Object.entries(form)) answers[label.replace(/’/g, \"'\").trim()] = value;\nconst field = (label) => String(answers[label] ?? '').trim();\n\nconst INTEREST = {\n  'Earrings': 'earrings', 'Necklaces': 'necklaces', 'Maang tikka': 'maang_tikka',\n  'Bangles': 'bangles', 'Gifting': 'gifting', 'A full festive set': 'full_set',\n};\nconst BUDGET = {\n  'Under ₹1,500': 'under_1500', '₹1,500–₹3,000': '1500_3000',\n  '₹3,000–₹5,000': '3000_5000', 'Above ₹5,000': 'above_5000',\n};\nconst OCCASION = {\n  'My Diwali outfit': 'diwali_outfit', 'Gifting': 'gifting', 'Wedding season': 'wedding_season',\n  'Treating myself': 'self_treat', 'Just browsing': 'just_browsing',\n};\nconst CONSENT = { 'Yes, email me about early access and offers': 'TRUE', 'No thanks': 'FALSE' };\n\nconst errors = [];\nconst need = (label) => { const v = field(label); if (!v) errors.push(`${label} is missing`); return v; };\nconst pick = (label, table) => {\n  const v = need(label);\n  if (!v) return '';\n  if (table[v] === undefined) { errors.push(`${label} \"${v.slice(0, 40)}\" is not a known option`); return ''; }\n  return table[v];\n};\n\nconst first_name = need('First name').slice(0, 100);\nconst city = need('City').slice(0, 100);\nconst email = need('Email').toLowerCase();\nif (email && !/^[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,}$/.test(email)) errors.push(`Email \"${email.slice(0, 60)}\" is not a valid address`);\nconst interest = pick(\"I'm shopping for\", INTEREST);\nconst budget = pick('My budget', BUDGET);\nconst occasion = pick('Occasion', OCCASION);\nconst consent = pick('Email consent', CONSENT);\n\nlet instagram_handle = field('Instagram handle').replace(/\\s+/g, '').replace(/^@+/, '');\ninstagram_handle = instagram_handle ? `@${instagram_handle}`.slice(0, 60) : '';\nconst phone = field('WhatsApp number').slice(0, 30);\n\nif (errors.length) {\n  return [{ json: { ok: false, errors, email_seen: email.slice(0, 80) } }];\n}\nreturn [{ json: { ok: true, first_name, email, phone, city, instagram_handle, interest, budget, occasion, consent } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        2700
+      ],
+      "id": "7fe1c65b-dbe7-5ac7-883d-0aba3088dd0f",
+      "name": "Lane 3 · Validate and normalise",
+      "notes": "Trim, map, check",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11dadc8a-54c7-5f35-8b2e-4796e3b871a6",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        2700
+      ],
+      "id": "9310405c-c66f-5d7d-8fe5-a4c598e414c9",
+      "name": "Lane 3 · Valid submission?",
+      "notes": "ok = true",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Build error log: a submission that failed validation is logged and the run stops.\nconst S = $('Lane 3 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 3,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst bad = $input.first().json;\nconst message = `Waitlist form rejected: ${bad.errors.join('; ')}`;\nreturn [{ json: event({\n  event_type: 'error', entity_type: 'lead', entity_id: '', channel: 'form',\n  detail: message, meta: { node: 'Lane 3 · Validate and normalise', message: message.slice(0, 500), email: bad.email_seen },\n}) }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        2560
+      ],
+      "id": "3fcb0885-c4b2-5001-87f5-ccd0100444ca",
+      "name": "Lane 3 · Build error log",
+      "notes": "error event",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        2560
+      ],
+      "id": "69957a42-31d7-5905-82df-2b3dccd6c840",
+      "name": "Lane 3 · Save error to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        2740
+      ],
+      "id": "727f8890-5c78-5f0c-806d-f1bfb83777d8",
+      "name": "Lane 3 · Read LEADS",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "For the duplicate check",
+      "notesInFlow": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Check duplicate\n// Input: every LEADS row (or one empty item when the tab is empty).\n// Output: the new lead plus is_duplicate / existing_lead_id / a fresh lead_id (SPEC 5.9).\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst lead = $('Lane 3 · Validate and normalise').first().json;\nconst rows = $input.all().map((item) => item.json).filter((row) => String(row?.lead_id ?? '').trim() !== '');\n\nconst existing = rows.find((row) => String(row.email ?? '').trim().toLowerCase() === lead.email);\nconst taken = new Set(rows.map((row) => String(row.lead_id).trim()));\nconst ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';\nfunction newLeadId() {\n  let id;\n  do {\n    const tail = Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');\n    id = `LD-${now.toFormat('yyyyMMdd')}-${tail}`;\n  } while (taken.has(id));\n  return id;\n}\nreturn [{ json: {\n  ...lead,\n  is_duplicate: Boolean(existing),\n  existing_lead_id: existing ? String(existing.lead_id).trim() : '',\n  lead_id: existing ? '' : newLeadId(),\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        2740
+      ],
+      "id": "2e96fab1-24f3-5890-8505-5c7edaad2c45",
+      "name": "Lane 3 · Check duplicate",
+      "notes": "Same email, any case",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a2a36e5a-abbc-5cc1-8d47-9a1a75e7f924",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        2740
+      ],
+      "id": "e5fbaaa9-e605-5562-8046-6dce98f5a069",
+      "name": "Lane 3 · Is duplicate?",
+      "notes": "true = already on list",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Build duplicate log: same email twice = no new row, just a log line.\nconst S = $('Lane 3 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 3,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst lead = $input.first().json;\nreturn [{ json: event({\n  event_type: 'lead_duplicate', entity_type: 'lead', entity_id: lead.existing_lead_id, channel: 'form',\n  detail: `Duplicate sign-up ignored (already ${lead.existing_lead_id})`, meta: { email: lead.email },\n}) }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        2620
+      ],
+      "id": "86835af2-3596-5e44-88ac-ec250e8e9a49",
+      "name": "Lane 3 · Build duplicate log",
+      "notes": "lead_duplicate event",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        2620
+      ],
+      "id": "86fc3f32-c3e3-57fc-8adf-15d80118dec2",
+      "name": "Lane 3 · Save duplicate to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Score lead: exact rules of SPEC 7.3 (cap 100).\nconst S = $('Lane 3 · Settings to object').first().json;\nconst lead = $input.first().json;\n\nconst BUDGET = { above_5000: 30, '3000_5000': 25, '1500_3000': 15, under_1500: 5 };\nconst OCCASION = { diwali_outfit: 25, gifting: 20, wedding_season: 20, self_treat: 15, just_browsing: 0 };\nconst INTEREST = { full_set: 15, necklaces: 12, earrings: 10, bangles: 10, gifting: 10, maang_tikka: 8 };\n\nconst parts = [\n  [`budget ${lead.budget}`, BUDGET[lead.budget] ?? 0],\n  [`occasion ${lead.occasion}`, OCCASION[lead.occasion] ?? 0],\n  [`interest ${lead.interest}`, INTEREST[lead.interest] ?? 0],\n];\nif (lead.instagram_handle) parts.push(['instagram', 10]);\nif (lead.phone) parts.push(['phone', 10]);\nif (lead.consent === 'TRUE') parts.push(['consent', 10]);\n\nconst score = Math.min(100, parts.reduce((sum, [, points]) => sum + points, 0));\nconst segment = score >= Number(S.HOT_LEAD_SCORE) ? 'hot' : score >= Number(S.WARM_LEAD_SCORE) ? 'warm' : 'cold';\nconst score_reason = parts.map(([label, points]) => `${label} +${points}`).join('; ');\n\n// The gate (next node) reads the recipient from `to_email`.\nreturn [{ json: { ...lead, score, segment, score_reason, to_email: lead.email } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        2800
+      ],
+      "id": "73b52f1a-b252-5be3-835c-1a05623d1ce4",
+      "name": "Lane 3 · Score lead",
+      "notes": "Rules of SPEC 7.3",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Demo safety gate: input items carry the recipient in `to_email` (SPEC 5.7).\nconst S = $('Lane 3 · Settings to object').first().json;\nconst PUBLIC = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.in', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'rediffmail.com', 'proton.me', 'protonmail.com'];\nconst list = (value) => String(value ?? '').toLowerCase().split(',').map((part) => part.trim()).filter(Boolean);\nfunction checkRecipient(email) {\n  const match = /^([a-z0-9._%-]+)(\\+[a-z0-9._%-]*)?@([a-z0-9.-]+\\.[a-z]{2,})$/.exec(email);\n  if (!match) return { ok: false, reason: 'not a single valid email address' };\n  const base = `${match[1]}@${match[3]}`;                      // plus-tag removed\n  const inboxes = [...list(S.ALLOWED_DEMO_INBOXES), ...list(S.SENDER_EMAIL)];\n  const domains = list(S.ALLOWED_EMAIL_DOMAINS).map((d) => d.replace(/^@/, '')).filter((d) => !PUBLIC.includes(d));\n  if (inboxes.includes(base)) return { ok: true, reason: 'demo inbox' };\n  if (domains.includes(match[3])) return { ok: true, reason: 'demo domain' };\n  return { ok: false, reason: 'not in ALLOWED_DEMO_INBOXES or ALLOWED_EMAIL_DOMAINS' };\n}\nreturn $input.all().map((item) => {\n  const to = String(item.json.to_email ?? '').trim().toLowerCase();\n  const check = checkRecipient(to);\n  return { json: { ...item.json, safe_to: check.ok ? to : '', gate_ok: check.ok, gate_reason: check.reason } };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        2800
+      ],
+      "id": "67e80424-d3c9-54ec-816c-dfda5cc5845d",
+      "name": "Lane 3 · Demo safety gate",
+      "notes": "Sets email_allowed",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Build lead row: EXACTLY the 28 LEADS columns of SPEC 2.4, in sheet order.\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\nconst S = $('Lane 3 · Settings to object').first().json;\nconst lead = $input.first().json;                           // comes out of the safety gate\nconst allowed = lead.gate_ok === true;\nconst stamp = nowTs();\nreturn [{ json: {\n  lead_id: lead.lead_id,\n  created_at: stamp,\n  source: 'waitlist_form',\n  first_name: lead.first_name,\n  email: lead.email,\n  phone: lead.phone,\n  city: lead.city,\n  instagram_handle: lead.instagram_handle,\n  interest: lead.interest,\n  budget: lead.budget,\n  occasion: lead.occasion,\n  consent: lead.consent,\n  email_allowed: allowed ? 'TRUE' : 'FALSE',\n  score: lead.score,\n  segment: lead.segment,\n  score_reason: lead.score_reason,\n  status: allowed ? 'new' : 'blocked',\n  sequence_id: 'WAITLIST_NURTURE',\n  seq_step: 0,\n  next_action_at: allowed && lead.consent === 'TRUE' ? stamp : '',\n  last_contacted_at: '',\n  launch_step: 0,\n  last_newsletter_id: '',\n  thread_ids: '',\n  last_reply_at: '',\n  reply_class: '',\n  notes: '',\n  updated_at: stamp,\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        2800
+      ],
+      "id": "5b82cb80-bb59-5487-868f-109bab58ad10",
+      "name": "Lane 3 · Build lead row",
+      "notes": "Exactly the 28 columns",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LEADS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_handle",
+              "displayName": "instagram_handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interest",
+              "displayName": "interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "occasion",
+              "displayName": "occasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_allowed",
+              "displayName": "email_allowed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment",
+              "displayName": "segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score_reason",
+              "displayName": "score_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sequence_id",
+              "displayName": "sequence_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seq_step",
+              "displayName": "seq_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "next_action_at",
+              "displayName": "next_action_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_contacted_at",
+              "displayName": "last_contacted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "launch_step",
+              "displayName": "launch_step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_newsletter_id",
+              "displayName": "last_newsletter_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_ids",
+              "displayName": "thread_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reply_at",
+              "displayName": "last_reply_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply_class",
+              "displayName": "reply_class",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        2800
+      ],
+      "id": "4cb57856-c364-50d9-8503-e165480a2ea4",
+      "name": "Lane 3 · Save to LEADS",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Appends one row",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Build log events: lead_captured (+ email_blocked when the safety gate said no).\nconst S = $('Lane 3 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 3,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst row = $input.first().json;                            // the row just saved (echoed by the append node)\nconst gate = $('Lane 3 · Demo safety gate').first().json;\nconst out = [event({\n  event_type: 'lead_captured', entity_type: 'lead', entity_id: row.lead_id, status_to: row.status, channel: 'form',\n  detail: `Waitlist sign-up: ${row.first_name} (${row.city}), score ${row.score} ${row.segment}`,\n  meta: { score: row.score, segment: row.segment },\n})];\nif (row.status === 'blocked') {\n  out.push(event({\n    event_type: 'email_blocked', entity_type: 'lead', entity_id: row.lead_id, status_to: 'blocked', channel: 'email',\n    detail: `Saved but never emailed: ${gate.gate_reason}`, meta: { reason: gate.gate_reason },\n  }));\n}\nreturn out.map((json) => ({ json }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        2800
+      ],
+      "id": "9dbea1e0-da18-5c2b-8736-ede279559e8c",
+      "name": "Lane 3 · Build log events",
+      "notes": "lead_captured (+ blocked)",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        2800
+      ],
+      "id": "eb497b07-51b6-583e-89b1-80c879fad7de",
+      "name": "Lane 3 · Save to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Build hot alert: only hot leads produce a Telegram message; everyone else ends the run here.\nconst S = $('Lane 3 · Settings to object').first().json;\nconst row = $('Lane 3 · Save to LEADS').first().json;\nif (row.segment !== 'hot') return [];\nconst esc = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nreturn [{ json: {\n  lead_id: row.lead_id,\n  chat_id: S.TELEGRAM_OWNER_CHAT_ID,\n  text: `🔥 New hot lead: ${esc(row.first_name)} (${esc(row.city)}), score ${row.score}`,\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        2800
+      ],
+      "id": "8b30c2b8-847c-5ad4-8ca0-ff8997db6188",
+      "name": "Lane 3 · Build hot alert",
+      "notes": "Hot leads only",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3300,
+        2800
+      ],
+      "id": "b48125ed-b48a-5963-8458-977170f6b06b",
+      "name": "Lane 3 · Alert owner on Telegram",
+      "webhookId": "3fdf8528-4d4d-585c-89ee-3731576ee035",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Kaya Demo · Telegram Bot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "notes": "To TELEGRAM_OWNER_CHAT_ID",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lane 3 · Build hot alert log: hot_alert_sent when Telegram answered, an `error` event when it did not.\n// The lead is already saved and logged by now, so a Telegram problem never loses the lead.\nconst S = $('Lane 3 · Settings to object').first().json;\n// ---- time helpers (SPEC 5.2 / 5.3)\nconst TZ = 'Asia/Kolkata';\nconst STAMP = \"yyyy-MM-dd'T'HH:mm:ssZZ\";\nconst now = $now.setZone(TZ);\nconst nowTs = () => $now.setZone(TZ).toFormat(STAMP);\nfunction parseTs(value) {\n  if (value === undefined || value === null || String(value).trim() === '') return null;\n  const text = String(value).trim();\n  const tries = [\n    () => DateTime.fromISO(text, { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy HH:mm:ss', { zone: TZ }),\n    () => DateTime.fromFormat(text, 'dd/MM/yyyy', { zone: TZ }),\n  ];\n  for (const attempt of tries) { const d = attempt(); if (d.isValid) return d.setZone(TZ); }\n  return null;\n}\nconst parseDate = (value) => parseTs(value)?.startOf('day') ?? null;\nconst addDays = (dateTime, days) => dateTime.plus({ milliseconds: Number(days) * S.DAY_MS });\n// Gap rule before ANY automated email to a person (SPEC 5.3)\nconst gapOk = (row, at) => !parseTs(row.last_contacted_at) || at.toMillis() - parseTs(row.last_contacted_at).toMillis() >= Number(S.MIN_EMAIL_GAP_DAYS) * S.DAY_MS;\nconst isTrue = (value) => String(value ?? '').trim().toUpperCase() === 'TRUE';\n// ---- event builder (SPEC 5.6)\nconst used = new Set();\nfunction eventId() {\n  let id;\n  do { id = `EV-${now.toFormat('yyyyMMddHHmmssSSS')}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0')}`; } while (used.has(id));\n  used.add(id);\n  return id;\n}\nfunction event({ event_type, entity_type, entity_id = '', status_from = '', status_to = '', channel = '', detail = '', meta = {} }) {\n  return {\n    event_id: eventId(), ts: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\"), lane: 3,\n    event_type, entity_type, entity_id, status_from, status_to, channel,\n    detail: String(detail).slice(0, 200), meta_json: JSON.stringify(meta),\n    execution_id: String($execution.id), demo_mode: S.IS_DEMO ? 'TRUE' : 'FALSE',\n  };\n}\nconst alert = $('Lane 3 · Build hot alert').first().json;\nconst reply = $input.first().json ?? {};\nconst messageId = reply.message_id ?? reply.result?.message_id;\nif (messageId !== undefined && messageId !== null && messageId !== '') {\n  return [{ json: event({\n    event_type: 'hot_alert_sent', entity_type: 'lead', entity_id: alert.lead_id, channel: 'telegram_owner',\n    detail: alert.text.replace(/<[^>]*>/g, ''), meta: { score: Number(/score (\\d+)/.exec(alert.text)?.[1] ?? 0), message_id: messageId },\n  }) }];\n}\nconst err = reply.error;\nconst detail = typeof err === 'string' ? err : (err?.description ?? err?.message ?? (err ? JSON.stringify(err) : 'Telegram returned no message_id'));\nreturn [{ json: event({\n  event_type: 'error', entity_type: 'lead', entity_id: alert.lead_id, channel: 'telegram_owner',\n  detail: `Hot-lead alert not sent: ${detail}`, meta: { node: 'Lane 3 · Alert owner on Telegram', message: String(detail).slice(0, 300) },\n}) }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        2800
+      ],
+      "id": "afd13e3e-2492-50a8-81ed-cfc3952b74e3",
+      "name": "Lane 3 · Build hot alert log",
+      "notes": "hot_alert_sent or error",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__KAYA_SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EVENTS_LOG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ts",
+              "displayName": "ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lane",
+              "displayName": "lane",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_from",
+              "displayName": "status_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_to",
+              "displayName": "status_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detail",
+              "displayName": "detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta_json",
+              "displayName": "meta_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "demo_mode",
+              "displayName": "demo_mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3740,
+        2800
+      ],
+      "id": "65b6f1ea-6c60-531c-807e-e9c221b4e057",
+      "name": "Lane 3 · Save alert to EVENTS_LOG",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Kaya Demo · Google Sheets"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Append to EVENTS_LOG",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "Lane 3 · Waitlist form": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Read SETTINGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Read SETTINGS": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Settings to object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Settings to object": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Validate and normalise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Validate and normalise": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Valid submission?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Valid submission?": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Read LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 3 · Build error log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Build error log": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Save error to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Read LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Check duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Check duplicate": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Is duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Is duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Build duplicate log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lane 3 · Score lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Build duplicate log": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Save duplicate to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Score lead": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Demo safety gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Demo safety gate": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Build lead row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Build lead row": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Save to LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Save to LEADS": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Build log events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Build log events": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Save to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Save to EVENTS_LOG": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Build hot alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Build hot alert": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Alert owner on Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Alert owner on Telegram": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Build hot alert log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lane 3 · Build hot alert log": {
+      "main": [
+        [
+          {
+            "node": "Lane 3 · Save alert to EVENTS_LOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "scenario": "Real cron trigger every minute",
+    "ok": true,
+    "message": "the row appeared in the channel 45 s after the server started (within the first minute)"
+  },
+  {
+    "scenario": "Real cron trigger every minute",
+    "ok": true,
+    "message": "3 scheduled executions, all successful"
+  },
+  {
+    "scenario": "Real cron trigger every minute",
+    "ok": true,
+    "message": "still exactly ONE message and ONE content_published event"
+  },
+  {
+    "scenario": "Real cron trigger every minute",
+    "ok": true,
+    "message": "row is published"
+  }
+]
